@@ -48,7 +48,7 @@ const METHODS=['Cash','Bank transfer','Card','OMT','Whish'];
 const APPAREL_CATS=['Match kit','Training kit','Tracksuit','Jacket','Socks','Bag','Other'];
 const COMP_KINDS=['League','Tournament','Cup','Friendly'];
 const ROLE_LABEL={owner:'Owner',admin:'Administration',coach:'Coach',parent:'Parent',guest:'Parent'};
-const DEFAULT_CONFIG={name:'Atelier XI Football Academy',short:'Atelier XI',slogan:'Art in player development',est:'2012',invoicePrefix:'AXI',address:'',phone:'',email:'',regNo:'',invoiceNote:'Thank you for being part of the academy.',groups:['U8','U10','U12','U14','U16'],pitches:['Pitch A','Pitch B']};
+const DEFAULT_CONFIG={name:'Atelier XI Football Academy',short:'Atelier XI',slogan:'Art in player development',est:'2012',invoicePrefix:'AXI',address:'',phone:'',email:'',regNo:'',invoiceNote:'Thank you for being part of the academy.',groups:['U8','U10','U12','U14','U16'],pitches:['Pitch A','Pitch B'],fee1:60,fee2:90,fee3:120,feeCur:'$'};
 const DEFAULT_FIN={currency:'$',defaultFee:60};
 
 /* ---------- utils ---------- */
@@ -243,7 +243,7 @@ const PAGES=[
 {id:'apparel',label:'Apparel & kits',sec:'Finance',roles:['owner','admin']},
 {id:'competitions',label:'Competitions',sec:'Competition',roles:['owner','admin']},
 {id:'matches',label:'Match centre',sec:'Competition',roles:['owner','admin','parent','guest']},
-{id:'ask',label:'Ask the academy',sec:'Academy',roles:['parent','guest']},
+{id:'ask',label:'Ask the academy',sec:'Academy',roles:['owner','admin','coach','parent','guest']},
 {id:'announcements',label:'Announcements',sec:'Academy',roles:['owner','admin','coach','parent','guest']},
 {id:'tasks',label:'Tasks',sec:'Academy',roles:['owner','admin','coach']},
 {id:'kits',label:'Kits & apparel',sec:'Academy',roles:['coach','parent','guest']},
@@ -1359,6 +1359,9 @@ ${panel({title:'Team',count:members.length,body:members.length?`<div class="tbl-
 ${fld('Age groups',inp('groups',c.groups.join(', ')),'Separate with commas, youngest first.')}
 ${fld('Pitches',inp('pitches',c.pitches.join(', ')))}
 <div class="f2">${fld('Currency symbol',inp('currency',f.currency))}${fld('Default monthly fee',inp('defaultFee',f.defaultFee,'number','min="0" step="1"'))}</div>
+<div class="subhead" style="margin:4px -16px 0">Monthly fees shown in the chat</div>
+<div class="f3">${fld('Once a week',inp('fee1',c.fee1,'number','min="0" step="1"'))}${fld('Twice a week',inp('fee2',c.fee2,'number','min="0" step="1"'))}${fld('Three times a week',inp('fee3',c.fee3,'number','min="0" step="1"'))}</div>
+<p class="muted small" style="margin:-4px 0 0">Per month, in the currency above. Leave a box empty to hide that option. Kit prices come from Apparel &amp; kits.</p>
 <div class="subhead" style="margin:4px -16px 0">Invoice details</div>
 <div class="f2">${fld('Address',inp('address',c.address||'','text','placeholder="Street, city"'))}${fld('Phone',inp('phone',c.phone||'','tel'))}</div>
 <div class="f2">${fld('Email',inp('email',c.email||'','text','inputmode="email"'))}${fld('Registration no. (optional)',inp('regNo',c.regNo||''))}</div>
@@ -1377,7 +1380,7 @@ ${PLATFORM.accessGuide()}
 };
 document.addEventListener('submit',e=>{if(e.target&&e.target.id==='settingsForm'){e.preventDefault();const f=formData(e.target);
 const groups=csvList(f.groups),pitches=csvList(f.pitches);if(!groups.length){toast('Add at least one age group.',true);return}
-W(async()=>{await Store.set('config/academy',{name:f.name||DEFAULT_CONFIG.name,short:f.short||DEFAULT_CONFIG.short,slogan:f.slogan,est:f.est,groups,pitches:pitches.length?pitches:DEFAULT_CONFIG.pitches,address:f.address,phone:f.phone,email:f.email,regNo:f.regNo,invoicePrefix:(f.invoicePrefix||'AXI').replace(/[^\w]/g,'').slice(0,8)||'AXI',invoiceNote:f.invoiceNote,updatedAt:Date.now()});const curF={...(D.finance||{})};delete curF.id;await Store.set('config/finance',{...curF,currency:f.currency||'$',defaultFee:num(f.defaultFee),updatedAt:Date.now()})},'Settings saved').catch(()=>{})}});
+W(async()=>{await Store.set('config/academy',{name:f.name||DEFAULT_CONFIG.name,short:f.short||DEFAULT_CONFIG.short,slogan:f.slogan,est:f.est,groups,pitches:pitches.length?pitches:DEFAULT_CONFIG.pitches,address:f.address,phone:f.phone,email:f.email,regNo:f.regNo,invoicePrefix:(f.invoicePrefix||'AXI').replace(/[^\w]/g,'').slice(0,8)||'AXI',invoiceNote:f.invoiceNote,fee1:f.fee1===''?null:num(f.fee1),fee2:f.fee2===''?null:num(f.fee2),fee3:f.fee3===''?null:num(f.fee3),feeCur:f.currency||'$',updatedAt:Date.now()});const curF={...(D.finance||{})};delete curF.id;await Store.set('config/finance',{...curF,currency:f.currency||'$',defaultFee:num(f.defaultFee),updatedAt:Date.now()})},'Settings saved').catch(()=>{})}});
 Object.assign(ACT,{
 approve:d=>{const r=D.requests.find(x=>x.id===d.id);if(!r)return;memberModal(d.id,{role:r.role==='admin'?'admin':'coach',label:r.name},r)},
 editMember:d=>memberModal(d.id,D.members[d.id]||{},null),
@@ -3058,14 +3061,16 @@ ACT.viewKit=d=>{const x=byId(D.catalog,d.id);if(!x)return;modal({title:x.name,wi
 
 /* ============================================================
 ATELIER XI — Ask the academy
-A free assistant for parents. No AI service: it answers from the
-app's public information (fixtures, results, training times,
-news, kit, player of the month, contact details) and hands
-anything else to the academy on WhatsApp.
+A free assistant for parents, coaches and administration. No AI
+service: it answers from the app's public information (fixtures,
+results, training times, news, kit, player of the month, contact
+details). The only money information it gives is the monthly
+fees (Team & settings) and kit prices (catalogue); payments,
+balances, salaries and every other finance figure stay out.
 ============================================================ */
 const ASK={log:[],draft:'',group:null,typing:false};
 try{ASK.group=localStorage.getItem('axi_ask_group')||null}catch(e){}
-const ASK_SUGGEST=[['next','Next match'],['result','Last result'],['training','Training times'],['news','Latest news'],['kit','Kit prices'],['potm','Player of the month'],['contact','Contact & location']];
+const ASK_SUGGEST=[['next','Next match'],['result','Last result'],['training','Training times'],['fees','Monthly fees'],['kit','Kit prices'],['news','Latest news'],['potm','Player of the month'],['contact','Contact & location']];
 const askNorm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[?!.,;:()'"’“”]/g,' ').replace(/\s+/g,' ').trim();
 const askHas=(t,words)=>words.some(w=>(' '+t+' ').includes(' '+w+' ')||(w.length>4&&t.includes(w)));
 const ASK_WORDS={
@@ -3075,12 +3080,32 @@ next:['next match','next game','upcoming','fixture','fixtures','when do we play'
 result:['result','results','score','scores','did we win','won','win','lost','lose','draw','last match','last game','نتيجة','النتيجة','ربحنا'],
 training:['training','train','practice','practise','session','sessions','schedule','timetable','what time','times','time','days','تمرين','التمرين','تدريب','مواعيد','dawam','tamrin'],
 news:['news','announcement','announcements','update','updates','anything new','notice','خبر','اخبار','أخبار','اعلان','إعلان'],
-kit:['kit','kits','jersey','jerseys','shirt','shirts','uniform','tracksuit','socks','bag','apparel','clothes','buy','order','size','sizes','price','prices','how much','cost','ثياب','لبس','بدلة','قميص','سعر','اسعار'],
+kit:['kit','kits','jersey','jerseys','shirt','shirts','uniform','tracksuit','socks','bag','apparel','clothes','buy','order','size','sizes','ثياب','لبس','بدلة','قميص','القميص','الثياب','اللبس','البدلة','كنزة','الكنزة','جوارب','الجوارب','شنطة','الشنطة'],
 potm:['player of the month','potm','best player','vote','voting','لاعب الشهر'],
 comp:['tournament','tournaments','league','cup','competition','competitions','festival','دوري','بطولة','كأس'],
 contact:['contact','phone','call','number','whatsapp','address','where','location','located','email','map','directions','pitch','وين','عنوان','رقم','تلفون','هاتف','موقع'],
-fees:['fee','fees','monthly','payment','pay','paid','register','registration','join','sign up','signup','trial','subscribe','subscription','قسط','اشتراك','تسجيل','دفع'],
+join:['register','registration','join','sign up','signup','trial','enrol','enroll','enrolment','enrollment','تسجيل','سجل'],
 };
+/* money: only the monthly fees and kit prices are ever shown, for every role */
+const FIN_BLOCK=['paid','unpaid','owe','owed','owes','debt','debts','balance','balances','salary','salaries','wage','wages','invoice','invoices','receipt','receipts','bill','bills','billing','budget','expense','expenses','income','revenue','profit','profits','earn','earned','earnings','contribution','contributions','discount','discounts','refund','deposit','مدفوع','راتب','رواتب','معاش','فاتورة','دين','ديون','مصروف','مصاريف'];
+const FIN_FEE=['fee','fees','tuition','subscription','subscribe','monthly fee','monthly fees','ishtirak','eshtirak','2est','qest','قسط','القسط','اقساط','أقساط','اشتراك','الاشتراك','شهرية','الشهرية'];
+const FIN_PRICE=['price','prices','pricing','cost','costs','money','cash','dollar','dollars','usd','lbp','lira','euro','euros','masari','msari','mesare','سعر','السعر','اسعار','أسعار','الاسعار','الأسعار','بكم','مصاري','فلوس','ليرة','دولار'];
+const FIN_PAY=['pay','paying','payment','payments','دفع','ادفع'];
+const ASK_MONEY_RE=/[$€£]\s?\d|\d\s?(\$|usd|lbp|ll\b|dollars?|euros?)/;
+const askFin=t=>askHas(t,FIN_BLOCK)||askHas(t,FIN_FEE)||askHas(t,FIN_PRICE)||askHas(t,FIN_PAY)||ASK_MONEY_RE.test(t);
+function askFinKind(t,TRAIN,KITW){
+if(askHas(t,FIN_BLOCK))return 'finance';
+if(askHas(t,FIN_FEE))return 'fees';
+const price=askHas(t,FIN_PRICE)||ASK_MONEY_RE.test(t)||(askHas(t,['how much'])&&!askHas(t,['time','long','minutes','hours','days'])),pay=askHas(t,FIN_PAY);
+if(!price&&!pay)return null;
+if(askHas(t,KITW))return 'kit';
+if(askHas(t,TRAIN)||askHas(t,['month','monthly','per month','a month','week','weekly','شهر','شهري','بالشهر']))return 'fees';
+return price?'price':'finance';
+}
+function askFees(){const c=cfg();const cur=c.feeCur||'$';const money=v=>`${esc(cur)}${num(v).toLocaleString('en-US',{maximumFractionDigits:2})}`;
+return [['Once a week',c.fee1],['Twice a week',c.fee2],['Three times a week',c.fee3]].filter(([,v])=>v!==null&&v!==undefined&&v!==''&&num(v)>0).map(([l,v])=>({l,v:money(v)}))}
+const askStaff=()=>['owner','admin','coach'].includes(S.role);
+const askRoute=(label,route)=>allowed(route)?{label,route}:null;
 const DAY_WORDS=[['sunday','sun','الأحد','الاحد'],['monday','mon','الاثنين','الإثنين'],['tuesday','tue','الثلاثاء'],['wednesday','wed','الأربعاء','الاربعاء'],['thursday','thu','الخميس'],['friday','fri','الجمعة'],['saturday','sat','السبت']];
 function askGroupIn(t){
 const gs=cfg().groups||[];const squash=s=>String(s).toLowerCase().replace(/[\s\-_]/g,'');const tt=squash(t);
@@ -3100,30 +3125,31 @@ function askAnswer(q){
 const t=askNorm(q);const g=askGroupIn(t)||null;if(g){ASK.group=g;try{localStorage.setItem('axi_ask_group',g)}catch(e){}}
 const grp=g||ASK.group;const c=cfg();const acts=[];let html='';
 const intent=k=>askHas(t,ASK_WORDS[k]);
-const TRAIN=['training','train','trains','practice','practise','session','sessions','تمرين','التمرين','تدريب','tamrin'],KITW=['kit','kits','jersey','jerseys','shirt','shirts','uniform','tracksuit','socks','bag','apparel','clothes','ثياب','لبس','بدلة','قميص'];
+const TRAIN=['training','train','trains','practice','practise','session','sessions','تمرين','التمرين','تدريب','tamrin'],KITW=['kit','kits','jersey','jerseys','shirt','shirts','uniform','tracksuit','socks','bag','apparel','clothes','ثياب','لبس','بدلة','قميص','القميص','الثياب','اللبس','البدلة','كنزة','الكنزة','جوارب','الجوارب','شنطة','الشنطة','tiyab','te2mis','2amis'];
 const pick=()=>{
+const fk=askFinKind(t,TRAIN,KITW);if(fk)return fk;
 if(intent('potm'))return 'potm';
-if(intent('fees'))return 'fees';
-if(intent('kit'))return askHas(t,TRAIN)&&!askHas(t,KITW)?'fees':'kit';
+if(intent('join'))return 'join';
+if(intent('kit'))return askHas(t,TRAIN)&&!askHas(t,KITW)?'training':'kit';
 if(askHas(t,TRAIN))return 'training';
 if(intent('result'))return 'result';
 if(intent('next'))return 'next';
 for(const k of ['news','comp','contact','training'])if(intent(k))return k;
 if(intent('thanks'))return 'thanks';if(intent('hello'))return 'hello';if(g)return 'training';return null};
 const k=q&&q.startsWith('#')?q.slice(1):pick();
-if(k==='hello'){html=`Hello! I’m the ${esc(c.short)} assistant. Ask me about matches, results, training times, news or kit.${grp?` I’ll show you <b>${esc(grp)}</b> first.`:' Tell me your child’s age group (for example U10) and I’ll keep it in mind.'}`}
+if(k==='hello'){html=`Hello! I’m the ${esc(c.short)} assistant. Ask me about matches, results, training times, monthly fees, kit prices or news.${grp?` I’ll show you <b>${esc(grp)}</b> first.`:` Tell me ${askStaff()?'an':'your child’s'} age group (for example U10) and I’ll keep it in mind.`}`}
 else if(k==='thanks'){html='You’re welcome! Anything else?'}
 else if(k==='next'){
 const live=upcomingMatches(grp).filter(m=>m.status==='live');const up=upcomingMatches(grp).slice(0,3);
 if(live.length)html=`<b>Live now</b><br>${live.map(askMatchLine).join('<br>')}`;
 else if(up.length)html=`${up.length>1?`Next ${grp?esc(grp)+' ':''}matches:`:`Next ${grp?esc(grp)+' ':''}match:`}<ul>${up.map(m=>`<li>${askMatchLine(m)}</li>`).join('')}</ul>`;
 else{const any=grp?upcomingMatches().slice(0,3):[];html=`No ${grp?esc(grp)+' ':''}matches are scheduled yet.${any.length?` Coming up for the academy:<ul>${any.map(m=>`<li>${askMatchLine(m)}</li>`).join('')}</ul>`:' New fixtures appear here as soon as the academy adds them.'}`}
-acts.push({label:'Match centre',route:'matches'});
+acts.push(askRoute('Match centre','matches'));
 }
 else if(k==='result'){
 const fin_=gr=>D.matches.filter(m=>m.status==='ft'&&(!gr||matchGroup(m)===gr)).sort(by(m=>m.date+(m.time||''),-1)).slice(0,3);let rs=fin_(grp);let note='';if(grp&&!rs.length){rs=fin_(null);if(rs.length)note=`No ${esc(grp)} results yet. `}
-html=rs.length?`${note}Latest ${grp&&!note?esc(grp)+' ':''}results:<ul>${rs.map(m=>{const r=matchResult(m);return `<li>${askMatchLine(m)}${r?` <span class="ask-res ${r}">${{W:'Won',D:'Draw',L:'Lost'}[r]}</span>`:''}${m.notes?`<br><span class="ask-sub">${esc(m.notes)}</span>`:''}</li>`}).join('')}</ul>`:`No ${grp?esc(grp)+' ':''}results yet.`;
-acts.push({label:'All results',route:'matches'});
+html=rs.length?`${note}Latest ${grp&&!note?esc(grp)+' ':''}results:<ul>${rs.map(m=>{const r=matchResult(m);return `<li>${askMatchLine(m)}${r?` <span class="ask-res ${r}">${{W:'Won',D:'Draw',L:'Lost'}[r]}</span>`:''}${m.notes&&!askFin(askNorm(m.notes))?`<br><span class="ask-sub">${esc(m.notes)}</span>`:''}</li>`}).join('')}</ul>`:`No ${grp?esc(grp)+' ':''}results yet.`;
+acts.push(askRoute('All results','matches'));
 }
 else if(k==='training'){
 const day=askDayIn(t);
@@ -3132,12 +3158,13 @@ html=ss.length?`Training on <b>${esc(fmtDayLong(day))}</b>:<ul>${ss.map(s=>`<li>
 else if(grp){const ss=D.schedule.filter(s=>s.group===grp).sort(by(s=>((Number(s.day)+6)%7)+(s.start||'')));
 html=ss.length?`<b>${esc(grp)}</b> trains:<ul>${ss.map(s=>`<li>${esc(DAY_LONG[Number(s.day)]||'')} · ${esc(s.start)}–${esc(s.end)}${s.pitch?' · '+esc(s.pitch):''}</li>`).join('')}</ul>`:`I don’t have a training schedule for ${esc(grp)} yet.`}
 else{html='Which age group? Tap one:';(c.groups||[]).forEach(x=>acts.push({label:x,ask:x+' training'}))}
-acts.push({label:'Full schedule',route:'schedule'});
+acts.push(askRoute('Full schedule','schedule'));
 }
 else if(k==='news'){
-const ns=[...D.announcements].sort(by(a=>(a.pinned?'1':'0')+(a.date||''),-1)).slice(0,3);
-html=ns.length?`Latest news:<ul>${ns.map(a=>`<li><b>${esc(a.title)}</b> <span class="ask-sub">· ${esc(fmtDate(a.date))}</span><br>${esc(String(a.body||'').slice(0,220))}${String(a.body||'').length>220?'…':''}</li>`).join('')}</ul>`:'No announcements right now.';
-acts.push({label:'All news',route:'announcements'});
+const all=[...D.announcements,...(askStaff()?(D.staffAnnouncements||[]).map(a=>({...a,_staff:true})):[])];
+const ns=all.filter(a=>!askFin(askNorm(a.title+' '+(a.body||'')))).sort(by(a=>(a.pinned?'1':'0')+(a.date||''),-1)).slice(0,3);
+html=ns.length?`Latest news:<ul>${ns.map(a=>`<li><b>${esc(a.title)}</b> <span class="ask-sub">· ${a._staff?'Staff only · ':''}${esc(fmtDate(a.date))}</span><br>${esc(String(a.body||'').slice(0,220))}${String(a.body||'').length>220?'…':''}</li>`).join('')}</ul>`:all.length?'Open Announcements to read the latest news.':'No announcements right now.';
+acts.push(askRoute('All news','announcements'));
 }
 else if(k==='kit'){
 const items=D.catalog||[];const words=t.split(' ').filter(w=>w.length>2);
@@ -3145,17 +3172,17 @@ const generic=['kit','kits','price','prices','buy','order','size','sizes','how',
 const hit=kw.length?items.filter(x=>kw.some(w=>askNorm(x.name+' '+(x.category||'')).includes(w))):[];
 const show=(hit.length&&hit.length<items.length?hit:items).slice(0,8);
 html=show.length?`${hit.length&&hit.length<items.length?'Here’s what I found:':'Our kit:'}<ul>${show.map(x=>`<li><b>${esc(x.name)}</b> · ${kitPrice(x)}${(x.sizes||[]).length?`<br><span class="ask-sub">Sizes ${esc(x.sizes.join(', '))}</span>`:''}</li>`).join('')}</ul>`:'The kit catalogue is empty for now.';
-acts.push({label:'See the kit',route:'kits'});const w=askBtnWa('Order on WhatsApp',`Hello, I’d like to order kit${show.length===1?': '+show[0].name:''}.`);if(w)acts.push(w);
+acts.push(askRoute('See the kit','kits')||askRoute('Apparel & kits','apparel'));if(!askStaff()){const w=askBtnWa('Order on WhatsApp',`Hello, I’d like to order kit${show.length===1?': '+show[0].name:''}.`);if(w)acts.push(w)}
 }
 else if(k==='potm'){
 const cur=D.potm.find(x=>x.id===monthOf(today()));const last=D.potm.filter(x=>x.status==='closed'&&x.winner).sort(by(x=>x.id,-1))[0];
-html=`${last?`<b>${esc(last.winnerName||'—')}</b> was Player of the Month for ${esc(fmtMonth(last.month||last.id))}.${last.citation?`<br><span class="ask-sub">“${esc(last.citation)}”</span>`:''}`:'No winner announced yet.'}${cur&&cur.status==='open'?`<br>Voting for ${esc(fmtMonthName(cur.month||cur.id))} is open. The winner is announced at the end of the month.`:''}`;
-acts.push({label:'Player of the month',route:'potm'});
+html=`${last?`<b>${esc(last.winnerName||'—')}</b> was Player of the Month for ${esc(fmtMonth(last.month||last.id))}.${last.citation&&!askFin(askNorm(last.citation))?`<br><span class="ask-sub">“${esc(last.citation)}”</span>`:''}`:'No winner announced yet.'}${cur&&cur.status==='open'?`<br>Voting for ${esc(fmtMonthName(cur.month||cur.id))} is open. The winner is announced at the end of the month.`:''}`;
+acts.push(askRoute('Player of the month','potm'));
 }
 else if(k==='comp'){
 const cs=D.competitions.filter(x=>compState(x)!=='finished'&&(!grp||compTeams(x).some(tm=>tm.group===grp))).sort(by(x=>x.start||''));
 html=cs.length?`${grp?esc(grp)+' is':'We’re'} playing in:<ul>${cs.map(x=>`<li><b>${esc(x.name)}</b> <span class="ask-sub">· ${esc(x.kind||'')}${x.start?' · '+esc(fmtDate(x.start))+(x.end?' – '+esc(fmtDate(x.end)):''):''}${x.location?' · '+esc(x.location):''}</span></li>`).join('')}</ul>`:`No ${grp?esc(grp)+' ':''}competitions running right now.`;
-acts.push({label:'Match centre',route:'matches'});
+acts.push(askRoute('Match centre','matches')||askRoute('Competitions','competitions'));
 }
 else if(k==='contact'){
 const lines=[c.address?`📍 ${esc(c.address)}`:'',c.phone?`📞 ${esc(c.phone)}`:'',c.email?`✉️ ${esc(c.email)}`:''].filter(Boolean);
@@ -3164,14 +3191,29 @@ const w=askBtnWa('WhatsApp the academy','Hello, I have a question.');if(w)acts.p
 if(c.address)acts.push({label:'Open in Maps',href:'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(c.address)});
 }
 else if(k==='fees'){
-html=`For fees, payments and registration, please message the academy directly. They’ll reply with the details for your child.`;
-const w=askBtnWa('WhatsApp the academy',`Hello, I have a question about ${intent('fees')&&askHas(t,['register','registration','join','trial','sign up'])?'registering my child':'fees and payments'}.`);if(w)acts.push(w);
+const fs=askFees();
+html=fs.length?`Monthly fees:<ul>${fs.map(f=>`<li><b>${f.l}</b> · ${f.v} per month</li>`).join('')}</ul>${askStaff()?'':'To register or arrange payment, message the academy.'}`:'Please message the academy for the monthly fees.';
+acts.push({label:'Training times',ask:'#training'});
+if(!askStaff()){const w=askBtnWa('WhatsApp the academy','Hello, I’d like to register my child.');if(w)acts.push(w)}
+}
+else if(k==='price'){
+html='Do you mean the monthly fees or kit prices?';acts.push({label:'Monthly fees',ask:'#fees'},{label:'Kit prices',ask:'#kit'});
+}
+else if(k==='finance'){
+if(askStaff())html=`In the chat I can only share the monthly fees and kit prices.${S.role==='coach'?' For anything else about money, ask the administration.':' Everything else is in the Finance pages.'}`;
+else{html='I can only share the monthly fees and kit prices here. For payments or anything about your account, please message the academy.';const w=askBtnWa('WhatsApp the academy','Hello, I have a question about payments.');if(w)acts.push(w)}
+acts.push({label:'Monthly fees',ask:'#fees'},{label:'Kit prices',ask:'#kit'});
+}
+else if(k==='join'){
+html=askStaff()?'Registrations and trials are handled by the academy administration.':'To register your child or book a trial, message the academy and they’ll take it from there.';
+acts.push({label:'Monthly fees',ask:'#fees'});if(!askStaff()){const w=askBtnWa('WhatsApp the academy','Hello, I’d like to register my child / book a trial.');if(w)acts.push(w)}
 }
 else{
-html=`I’m not sure about that one. I can help with matches, results, training times, news, kit and contact details.${askWa()?' Or send your question to the academy:':''}`;
-const w=askBtnWa('Send to the academy on WhatsApp',`Hello, ${q}`);if(w)acts.push(w);
+const wa=!['owner','admin'].includes(S.role)&&askWa();
+html=`I’m not sure about that one. I can help with matches, results, training times, monthly fees, kit prices, news and contact details.${wa?' Or send your question to the academy:':''}`;
+if(wa){const w=askBtnWa('Send to the academy on WhatsApp',`Hello, ${q}`);if(w)acts.push(w)}
 }
-return {html,acts};
+return {html,acts:acts.filter(Boolean)};
 }
 function askPush(q){
 if(!String(q||'').trim())return;
@@ -3184,22 +3226,22 @@ Object.assign(ACT,{
 askSend:()=>{const i=$('#askInput');const q=(i&&i.value||ASK.draft||'').trim();if(i)i.value='';askPush(q)},
 askQuick:d=>askPush(d.q),
 askGo:d=>go(d.r),
-askGroup:()=>{const gs=cfg().groups||[];modal({title:'Your child’s age group',submit:'Save',body:fld('Age group',sel('g',[['','No group'],...gs.map(x=>[x,x])],ASK.group||'')),onSubmit:async f=>{ASK.group=f.g||null;try{f.g?localStorage.setItem('axi_ask_group',f.g):localStorage.removeItem('axi_ask_group')}catch(e){}render()}})},
+askGroup:()=>{const gs=cfg().groups||[];modal({title:askStaff()?'Age group':'Your child’s age group',submit:'Save',body:fld('Age group',sel('g',[['','No group'],...gs.map(x=>[x,x])],ASK.group||'')),onSubmit:async f=>{ASK.group=f.g||null;try{f.g?localStorage.setItem('axi_ask_group',f.g):localStorage.removeItem('axi_ask_group')}catch(e){}render()}})},
 askClear:()=>{ASK.log=[];render()},
 });
 INPUT.askDraft=v=>{ASK.draft=v};
 document.addEventListener('submit',e=>{if(e.target&&e.target.id==='askForm'){e.preventDefault();ACT.askSend()}});
 PAGE_RENDER.ask=()=>{
 const c=cfg();
-const intro={me:false,html:`Hi! I’m the ${esc(c.short)} assistant. Ask me about matches, results, training times, news, kit or how to reach us.`};
+const intro={me:false,html:`Hi! I’m the ${esc(c.short)} assistant. Ask me about matches, results, training times, monthly fees, kit prices, news or how to reach us.`};
 const msgs=[intro,...ASK.log];
 const bubble=m=>`<div class="ask-m ${m.me?'me':'bot'}">${m.me?'':`<span class="ask-av"><img src="${IMG.crestN}" alt=""></span>`}<div class="ask-b">${m.html}${m.acts&&m.acts.length?`<div class="ask-acts">${m.acts.map(a=>a.href?`<a class="btn sm" href="${esc(a.href)}" target="_blank" rel="noopener">${esc(a.label)}</a>`:a.route?`<button class="btn sm" data-act="askGo" data-r="${esc(a.route)}">${esc(a.label)} →</button>`:`<button class="btn sm" data-act="askQuick" data-q="${esc(a.ask)}">${esc(a.label)}</button>`).join('')}</div>`:''}</div></div>`;
-return titleBlock({sec:'Academy · Ask',title:'Ask the academy',month:false,note:'Quick answers about matches, training, news and kit.'})+
-`<section class="panel ask"><div class="ask-top"><button class="chip ${ASK.group?'on':''}" data-act="askGroup" aria-label="Change age group">${ASK.group?`Age group: ${esc(ASK.group)}`:'Set your child’s age group'}</button>${ASK.log.length?'<button class="btn sm ghost" data-act="askClear">Clear chat</button>':''}</div>
+return titleBlock({sec:'Academy · Ask',title:'Ask the academy',month:false,note:'Quick answers about matches, training, fees, kit and news.'})+
+`<section class="panel ask"><div class="ask-top"><button class="chip ${ASK.group?'on':''}" data-act="askGroup" aria-label="Change age group">${ASK.group?`Age group: ${esc(ASK.group)}`:askStaff()?'Choose an age group':'Set your child’s age group'}</button>${ASK.log.length?'<button class="btn sm ghost" data-act="askClear">Clear chat</button>':''}</div>
 <div class="ask-log" id="askLog" role="log" aria-live="polite">${msgs.map(bubble).join('')}${ASK.typing?'<div class="ask-m bot"><span class="ask-av"><img src="'+IMG.crestN+'" alt=""></span><div class="ask-b ask-typing" aria-label="Typing"><i></i><i></i><i></i></div></div>':''}</div>
 <div class="ask-sugg" role="group" aria-label="Suggested questions">${ASK_SUGGEST.map(([k,l])=>`<button class="chip" data-act="askQuick" data-q="#${k}">${esc(l)}</button>`).join('')}</div>
 <form class="ask-form" id="askForm" autocomplete="off"><input class="input" id="askInput" placeholder="Type a question…" value="${esc(ASK.draft)}" data-input="askDraft" aria-label="Your question" enterkeyhint="send"><button class="btn primary" type="submit" aria-label="Send">Send</button></form></section>
-<p class="muted small">This assistant answers from the academy’s app. For anything personal, message the academy.</p>`;
+<p class="muted small">${askStaff()?'This assistant answers from the academy’s app. Apart from the monthly fees and kit prices, no finance information is shown in the chat.':'This assistant answers from the academy’s app. For anything personal, message the academy.'}</p>`;
 };
 /* floating chat button for parents */
 {const base=doRender;doRender=function(){base();const show=['parent','guest'].includes(S.role)&&S.route!=='ask'&&S.mode!=='loading';let f=$('#askFab');
