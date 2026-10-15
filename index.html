@@ -122,6 +122,8 @@ subDoc:(p,cb,err)=>db.doc(p).onSnapshot(s=>cb(s.exists?{...s.data(),id:s.id}:nul
 set:(p,d)=>db.doc(p).set(d), update:(p,d)=>db.doc(p).update(d), del:p=>db.doc(p).delete(),
 add:async(col,d)=>{const r=db.collection(col).doc();await r.set(d);return r.id},
 newId:col=>db.collection(col).doc().id,
+getCol:col=>db.collection(col).get().then(s=>s.docs.map(d=>({...d.data(),id:d.id}))),
+getDoc:p=>db.doc(p).get().then(s=>s.exists?{...s.data(),id:s.id}:null),
 };
 }
 function makeMemStore(seed){
@@ -140,6 +142,8 @@ async update(p,d){const[c,id]=split(p);const v=col(c).get(id);if(!v)throw{code:'
 async del(p){const[c,id]=split(p);col(c).delete(id);notify(c)},
 async add(c,d){const id=uid();col(c).set(id,clone(d));notify(c);return id},
 newId:()=>uid(),
+async getCol(c){return query(c)},
+async getDoc(p){const[c,id]=split(p);const v=col(c).get(id);return v?{...clone(v),id}:null},
 };
 }
 const Subs={m:new Map(),
@@ -584,6 +588,7 @@ if(appUnpaid.length)attn.push(['apparel','',`${appUnpaid.length} apparel order${
 {const dueC=coachPayDue(m);if(dueC>0&&(m<monthOf(today())||Number(today().slice(8))>=25))attn.push(['money','coachpay',`Coach pay still due for ${fmtMonthName(m)} · ${money(dueC)}`,'Pay']);}
 if(S.role==='owner'&&D.requests.length)attn.push(['access','',`${D.requests.length} access request${D.requests.length>1?'s':''} to approve`,'Approve']);
 if(pm&&pm.status==='open'&&!myVote(pm.id))attn.push(['potm','',`Player of the month voting is open — you haven’t voted yet`,'Vote']);
+if(S.role==='owner'&&LOADED.has('finance')&&backupDue()){const lb=lastBackup();attn.push(['','',lb&&lb.date?`Monthly backup: your last copy is from ${fmtDateY(lb.date)}. Download this month’s.`:'Download your first backup of the academy’s data and keep it somewhere safe.','Download','backupNow'])}
 const lead=`${esc(cfg().name)} · ${esc(cfg().slogan)}`;
 return titleBlock({sec:'Est. '+cfg().est+' · Overview',title:fmtMonthName(m)+' at a glance',note:lead,art:true,cells:[['Players',activePlayers().length]]})+
 `<div class="kpis">
@@ -594,7 +599,7 @@ ${kpi('Attendance',att.rate==null?'—':att.rate+'<small>%</small>',`${att.a} of
 </div>
 <div class="grid g-main">
 <div class="grid">
-${panel({title:'Needs attention',count:attn.length||null,body:attn.length?`<div class="list">${attn.map(a=>`<div class="li"><div class="grow">${esc(a[2])}</div><button class="btn sm" data-act="goTab" data-r="${a[0]}" data-t="${a[1]}">${a[3]}</button></div>`).join('')}</div>`:`<div class="empty" style="padding:24px"><p>Nothing waiting on you this month.</p></div>`})}
+${panel({title:'Needs attention',count:attn.length||null,body:attn.length?`<div class="list">${attn.map(a=>`<div class="li"><div class="grow">${esc(a[2])}</div><button class="btn sm" ${a[4]?`data-act="${a[4]}" ${S.ui.bkBusy?'disabled':''}`:`data-act="goTab" data-r="${a[0]}" data-t="${a[1]}"`}>${a[4]&&S.ui.bkBusy?'Preparing…':a[3]}</button></div>`).join('')}</div>`:`<div class="empty" style="padding:24px"><p>Nothing waiting on you this month.</p></div>`})}
 ${isCur?panel({title:'Today’s sessions',count:todays.length,actions:`<button class="btn sm" data-act="go" data-r="attendance">Attendance</button>`,body:todays.length?`<div class="list">${todays.map(s=>{const doc=sessDoc(s.id);const g=playersInGroup(s.group);const marked=g.filter(p=>doc&&doc.players&&doc.players[p.id]).length;return `<div class="li click" data-act="openSession" data-id="${s.id}"><span class="mono small" style="width:96px">${esc(s.start)}–${esc(s.end)}</span><div class="grow"><div class="t">${esc(s.group)} <span class="muted small">· ${esc(s.pitch||'')}</span></div><div class="s">${(s.coachIds||[]).map(coachName).map(esc).join(', ')||'No coach assigned'}</div></div><span class="pill ${marked?marked>=g.length?'ok':'warn':'plain'}">${marked}/${g.length} marked</span></div>`}).join('')}</div>`:`<div class="empty" style="padding:24px"><p>No training scheduled today.</p></div>`}):''}
 ${panel({title:'Next matches',actions:`<button class="btn sm" data-act="go" data-r="competitions">Competitions</button>`,body:next.length?next.map(fixtureRow).join(''):`<div class="empty" style="padding:24px"><p>No upcoming matches. Add fixtures from Competitions.</p></div>`})}
 </div>
@@ -1221,7 +1226,8 @@ ${fld('Pitches',inp('pitches',c.pitches.join(', ')))}
 <div class="f2">${fld('Email',inp('email',c.email||'','text','inputmode="email"'))}${fld('Registration no. (optional)',inp('regNo',c.regNo||''))}</div>
 <div class="f2">${fld('Invoice number prefix',inp('invoicePrefix',c.invoicePrefix||'AXI','text','maxlength="8"'),'Invoices are numbered '+esc(invFormat((D.finance||{}).nextInvoice||1))+', then counting up.')}${fld('Footer message',inp('invoiceNote',c.invoiceNote||''))}</div>
 <div><button class="btn primary" type="submit">Save settings</button></div></form></section>
-</div><div class="grid">
+</div><div class="grid" style="align-content:start">
+${backupPanel()}
 ${PLATFORM.accessGuide()}
 <div class="callout"><h4>What each role can do</h4><ul>
 <li><b>Owner</b> — everything, including assigning tasks and managing access.</li>
@@ -1684,6 +1690,285 @@ confirmBox('Tick all scheduled sessions',`Mark ${esc(coachName(d.c))} present fo
 });
 
 /* ============================================================
+ATELIER XI — Owner backup: everything in one Excel file
+============================================================ */
+const BK_COLS=['players','billing','payments','expenses','coaches','schedule','sessions','confirmations','competitions','matches','compPayments','apparelItems','apparelOrders','progress','ratings','ratingsLatest','announcements','staffAnnouncements','tasks','taskStatus','potm','potmVotes','members','requests'];
+const BK_DOCS=['config/academy','config/finance'];
+const BK_SKIP=['id','photoData','photo','photoUrl'];
+const BK_MARK={P:'Present',L:'Late',A:'Absent',E:'Excused'};
+const BK_ENC=new TextEncoder();
+
+/* ---------- zip (stored or deflated) ---------- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC_T[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+async function deflateRaw(u){if(typeof CompressionStream!=='function')return null;try{const s=new Blob([u]).stream().pipeThrough(new CompressionStream('deflate-raw'));return new Uint8Array(await new Response(s).arrayBuffer())}catch(e){return null}}
+async function zipBlob(files,type){
+const parts=[],cent=[];let off=0;const now=new Date();
+const tm=((now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1))&0xFFFF,dt=(((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+for(const f of files){
+const name=BK_ENC.encode(f.name),raw=f.data,crc=crc32(raw);const z=await deflateRaw(raw);const body=z&&z.length<raw.length?z:raw;const method=body===raw?0:8;
+const h=new DataView(new ArrayBuffer(30));
+h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,method,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);
+h.setUint32(14,crc,true);h.setUint32(18,body.length,true);h.setUint32(22,raw.length,true);h.setUint16(26,name.length,true);h.setUint16(28,0,true);
+parts.push(new Uint8Array(h.buffer),name,body);
+const c=new DataView(new ArrayBuffer(46));
+c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,method,true);c.setUint16(12,tm,true);c.setUint16(14,dt,true);
+c.setUint32(16,crc,true);c.setUint32(20,body.length,true);c.setUint32(24,raw.length,true);c.setUint16(28,name.length,true);c.setUint32(42,off,true);
+cent.push(new Uint8Array(c.buffer),name);
+off+=30+name.length+body.length;
+}
+const size=cent.reduce((a,b)=>a+b.length,0);
+const e=new DataView(new ArrayBuffer(22));
+e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,size,true);e.setUint32(16,off,true);
+return new Blob([...parts,...cent,new Uint8Array(e.buffer)],{type});
+}
+
+/* ---------- xlsx ---------- */
+const xesc=s=>String(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F￾￿]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const colL=i=>{let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+const XST={head:1,title:2,money:3,muted:4,bold:5};
+function xcell(ref,v,st){
+const s=st?` s="${st}"`:'';
+if(v===''||v==null)return '';
+if(typeof v==='number')return isFinite(v)?`<c r="${ref}"${s}><v>${v}</v></c>`:'';
+let t=String(v);if(t.length>32000)t=t.slice(0,32000)+'…';
+return `<c r="${ref}" t="inlineStr"${s}><is><t xml:space="preserve">${xesc(t)}</t></is></c>`;
+}
+/* sheet: {name, rows:[[value|{v,s}]], widths:[n], freeze:bool, filter:'A1:K9'|null} */
+function sheetXml(sh){
+const out=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'];
+out.push(sh.freeze?'<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>':'<sheetViews><sheetView workbookViewId="0"/></sheetViews>');
+out.push('<sheetFormatPr defaultRowHeight="15"/>');
+if(sh.widths.length)out.push('<cols>'+sh.widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>');
+out.push('<sheetData>');
+sh.rows.forEach((r,ri)=>{const cells=r.map((c,ci)=>{const o=c&&typeof c==='object'?c:{v:c};return xcell(colL(ci)+(ri+1),o.v,o.s)}).join('');
+const hi=r.some(c=>c&&typeof c==='object'&&c.s===XST.head)?' ht="20" customHeight="1"':r.some(c=>c&&typeof c==='object'&&c.s===XST.title)?' ht="24" customHeight="1"':'';
+out.push(`<row r="${ri+1}"${hi}>${cells}</row>`)});
+out.push('</sheetData>');
+if(sh.filter)out.push(`<autoFilter ref="${sh.filter}"/>`);
+out.push('</worksheet>');
+return out.join('');
+}
+const STYLES_XML='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+'<fonts count="5"><font><sz val="11"/><color rgb="FF0E1E3A"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="16"/><color rgb="FF0E1E3A"/><name val="Calibri"/><family val="2"/></font><font><sz val="10"/><color rgb="FF5D6886"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FF0E1E3A"/><name val="Calibri"/><family val="2"/></font></fonts>'+
+'<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0E1E3A"/><bgColor indexed="64"/></patternFill></fill></fills>'+
+'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'+
+'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+'<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+'<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>'+
+'<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+'<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'+
+'<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+'<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>'+
+'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+async function xlsxBlob(sheets){
+const X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+const q=n=>"'"+n.replace(/'/g,"''")+"'";
+const names=sheets.map(s=>`<sheet name="${xesc(s.name)}" sheetId="${sheets.indexOf(s)+1}" r:id="rId${sheets.indexOf(s)+1}"/>`).join('');
+const dn=sheets.map((s,i)=>s.filter?`<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">${xesc(q(s.name))}!${s.filter.replace(/([A-Z]+)(\d+)/g,'$$$1$$$2')}</definedName>`:'').join('');
+const files=[
+{name:'[Content_Types].xml',xml:X+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')+'</Types>'},
+{name:'_rels/.rels',xml:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+{name:'xl/workbook.xml',xml:X+`<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${names}</sheets>${dn?`<definedNames>${dn}</definedNames>`:''}</workbook>`},
+{name:'xl/_rels/workbook.xml.rels',xml:X+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')+`<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+{name:'xl/styles.xml',xml:STYLES_XML},
+...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,xml:sheetXml(s)})),
+];
+return zipBlob(files.map(f=>({name:f.name,data:BK_ENC.encode(f.xml)})),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+/* ---------- turning records into readable tables ---------- */
+const bkTime=t=>{if(!t)return '';const d=new Date(t);return isNaN(d)?'':ds(d)+' '+pad(d.getHours())+':'+pad(d.getMinutes())};
+const bkHuman=k=>k.replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase().replace(/^./,c=>c.toUpperCase());
+function bkVal(k,v){
+if(v==null)return '';
+if(typeof v==='boolean')return v?'Yes':'No';
+if(typeof v==='number')return /(^at$|At$)/.test(k)&&v>1e11?bkTime(v):v;
+if(Array.isArray(v))return v.every(x=>x==null||typeof x!=='object')?v.join(', '):JSON.stringify(v);
+if(typeof v==='object')return JSON.stringify(v);
+return String(v);
+}
+function bkNum(v){if(v===''||v==null)return '';const n=Number(v);return isFinite(n)?n:String(v)}
+/* cols: [{h, f:key|fn, t:'money'|'num', k:[keys the fn reads]}]; fields not covered are appended so nothing is lost */
+function bkTable(name,about,rows,cols,skip){
+const used=new Set([...BK_SKIP,...(skip||[])]);
+cols.forEach(c=>{if(typeof c.f==='string')used.add(c.f);(c.k||[]).forEach(k=>used.add(k))});
+const extra=[];rows.forEach(r=>Object.keys(r).forEach(k=>{if(!used.has(k)&&!k.startsWith('_')&&!extra.includes(k))extra.push(k)}));
+const all=[...cols,...extra.map(k=>({h:bkHuman(k),f:k})),{h:'Record ID',f:'id'}];
+return {name,about,count:rows.length,head:all.map(c=>c.h),types:all.map(c=>c.t||''),
+rows:rows.map(r=>all.map(c=>{const v=typeof c.f==='function'?c.f(r):bkVal(c.f,r[c.f]);return c.t?bkNum(v):v}))};
+}
+function bkPlain(name,about,head,types,rows){return {name,about,count:rows.length,head,types,rows}}
+function bkDataSheet(t){
+const n=t.head.length;
+const widths=t.head.map((h,i)=>{let w=h.length;for(let r=0;r<Math.min(t.rows.length,300);r++){const v=t.rows[r][i];const l=v==null?0:typeof v==='number'?String(Math.round(v)).length+3:String(v).length;if(l>w)w=l}return Math.max(8,Math.min(60,w+2))});
+const rows=[t.head.map(h=>({v:h,s:XST.head})),...t.rows.map(r=>r.map((v,i)=>t.types[i]==='money'&&typeof v==='number'?{v,s:XST.money}:v))];
+return {name:t.name,rows,widths,freeze:true,filter:`A1:${colL(n-1)}${Math.max(2,t.rows.length+1)}`};
+}
+
+function bkTables(A){
+const finDoc=A.config.find(x=>x.id==='finance')||{},acad=A.config.find(x=>x.id==='academy')||{};
+const cur=finDoc.currency||fin().currency||'$',AM=`Amount (${cur})`,defFee=finDoc.defaultFee!=null?finDoc.defaultFee:DEFAULT_FIN.defaultFee;
+const P=toMap(A.players),C=toMap(A.coaches),I=toMap(A.apparelItems),K=toMap(A.competitions),Mb=toMap(A.members),Rq=toMap(A.requests),bill=toMap(A.billing),rates=finDoc.coachRates||{};
+const conf=toMap(A.confirmations),done=toMap(A.taskStatus);
+const pn=id=>!id?'':P[id]?P[id].name:'(removed player)';
+const pg=id=>P[id]&&P[id].group||'';
+const cn=id=>!id?'':C[id]?C[id].name:'(removed coach)';
+const who=id=>{if(!id)return '';const m=Mb[id];if(m){if(m.label)return m.label;if(m.coachId&&C[m.coachId])return C[m.coachId].name;if(m.email)return m.email;if(m.name)return m.name}if(Rq[id]&&Rq[id].name)return Rq[id].name;return personName(id)};
+const cst=(sid,cid)=>{const v=((conf[sid]||{}).coaches||{})[cid];return v==='ok'?'Confirmed':v==='no'?'Rejected':'Waiting'};
+const day=d=>d?DAY_SHORT[parseD(d).getDay()]:'';
+const byKey=(arr,f,dir)=>[...arr].sort(by(f,dir));
+const T=[];
+
+T.push(bkTable('Players','Every player, with group, parents, training days and monthly fee',byKey(A.players,p=>(p.group||'')+'|'+(p.name||'')),[
+{h:'Name',f:'name'},{h:'Group',f:'group'},{h:'Status',f:'status'},{h:'Date of birth',f:'dob'},{h:'Position',f:'position'},{h:'Shirt no.',f:'number'},
+{h:'Training days',f:p=>(p.trainingDays||[]).map(d=>DAY_SHORT[Number(d)]||d).join(', '),k:['trainingDays']},
+{h:'Parent',f:'parentName'},{h:'Parent phone',f:'parentPhone'},{h:'Joined',f:'joined'},
+{h:`Monthly fee (${cur})`,f:p=>bill[p.id]&&bill[p.id].fee!=null&&bill[p.id].fee!==''?bill[p.id].fee:defFee,t:'money'},
+{h:'Notes',f:'notes'},{h:'Photo',f:p=>p.photoData||p.photo||p.photoUrl?'Yes':''}]));
+
+T.push(bkTable('Payments','Every monthly tuition payment, with invoice numbers',byKey(A.payments,x=>(x.date||'')+(x.at||'')),[
+{h:'Date',f:'date'},{h:'Player',f:x=>pn(x.playerId),k:['playerId']},{h:'Group',f:x=>pg(x.playerId)},{h:'For month',f:'month'},{h:AM,f:'amount',t:'money'},
+{h:'Method',f:'method'},{h:'Invoice no.',f:'invoiceNo'},{h:'Invoice date',f:'invoiceDate'},{h:'Note',f:'note'},{h:'Recorded by',f:x=>who(x.by),k:['by']},{h:'Recorded at',f:'at'}]));
+
+T.push(bkTable('Expenses','Money going out: coach pay, pitch rent, equipment and more',byKey(A.expenses,x=>(x.date||'')+(x.at||'')),[
+{h:'Date',f:'date'},{h:'Month',f:'month'},{h:'Category',f:'category'},{h:'Description',f:'label'},{h:AM,f:'amount',t:'money'},{h:'Method',f:'method'},
+{h:'Coach',f:x=>cn(x.coachId),k:['coachId']},{h:'Repeats monthly',f:'recurring'},{h:'Note',f:'note'},{h:'Recorded by',f:x=>who(x.by),k:['by']},{h:'Recorded at',f:'at'}]));
+
+const sess=byKey(A.sessions,s=>(s.date||'')+(s.start||'')+(s.group||''));
+const cnt=(s,m)=>Object.values(s.players||{}).filter(v=>v===m).length;
+const cin=s=>Object.keys(s.coaches||{}).filter(c=>s.coaches[c]);
+T.push(bkTable('Sessions','Every training session held, with attendance totals and coaches',sess,[
+{h:'Date',f:'date'},{h:'Day',f:s=>day(s.date)},{h:'Month',f:'month'},{h:'Group',f:'group'},{h:'Start',f:'start'},{h:'End',f:'end'},{h:'Pitch',f:'pitch'},
+{h:'Present',f:s=>cnt(s,'P'),t:'num',k:['players']},{h:'Late',f:s=>cnt(s,'L'),t:'num'},{h:'Absent',f:s=>cnt(s,'A'),t:'num'},{h:'Excused',f:s=>cnt(s,'E'),t:'num'},
+{h:'Coaches',f:s=>cin(s).map(c=>`${cn(c)} (${cst(s.id,c).toLowerCase()})`).join(', '),k:['coaches']},
+{h:'Scheduled coaches',f:s=>(s.coachIds||[]).map(cn).join(', '),k:['coachIds']},{h:'Note',f:'note'}],['slotId']));
+
+const cs=[];sess.forEach(s=>cin(s).forEach(c=>{const x=s.coaches[c]||{};cs.push({m:s.month||monthOf(s.date),c:cn(c),r:[s.month||monthOf(s.date),s.date,day(s.date),cn(c),s.group||'',`${s.start||''}–${s.end||''}`,s.pitch||'',cst(s.id,c),x.manual?'Added by '+who(x.by):x.at?'Checked in '+bkTime(x.at):'']})}));
+cs.sort(by(x=>x.m+'|'+x.c+'|'+x.r[1]+x.r[5]));
+const tot={};cs.forEach(x=>{const k=x.m+'|'+x.c;const t=tot[k]||(tot[k]={m:x.m,c:x.c,Confirmed:0,Waiting:0,Rejected:0});t[x.r[7]]++});
+T.push(bkPlain('Coach totals','Sessions each coach gave, month by month',['Month','Coach','Counted (confirmed)','Waiting','Rejected'],['','','num','num','num'],
+Object.values(tot).sort(by(t=>t.m+'|'+t.c)).map(t=>[t.m,t.c,t.Confirmed,t.Waiting,t.Rejected])));
+T.push(bkPlain('Coach sessions','Every coach check-in and its confirmation',['Month','Date','Day','Coach','Group','Time','Pitch','Status','How'],[],cs.map(x=>x.r)));
+
+const pa=[];sess.forEach(s=>Object.entries(s.players||{}).forEach(([pid,v])=>{if(v)pa.push([s.date,s.month||monthOf(s.date),s.group||'',pn(pid),BK_MARK[v]||v])}));
+pa.sort(by(r=>r[0]+'|'+r[2]+'|'+r[3]));
+T.push(bkPlain('Player attendance','Every attendance mark, one row per player per session',['Date','Month','Group','Player','Mark'],[],pa));
+
+T.push(bkTable('Coaches','Coach profiles and pay rates',byKey(A.coaches,c=>c.name||''),[
+{h:'Name',f:'name'},{h:'Title',f:'title'},{h:'Phone',f:'phone'},{h:'Groups',f:'groups'},
+{h:'Pay type',f:c=>rates[c.id]?(rates[c.id].type==='monthly'?'Monthly salary':'Per session'):''},{h:`Pay rate (${cur})`,f:c=>rates[c.id]?rates[c.id].rate:'',t:'money'}]));
+
+T.push(bkTable('Training schedule','The weekly training timetable',byKey(A.schedule,s=>((Number(s.day)+6)%7)+'|'+(s.start||'')),[
+{h:'Day',f:s=>DAY_SHORT[Number(s.day)]||s.day,k:['day']},{h:'Group',f:'group'},{h:'Start',f:'start'},{h:'End',f:'end'},{h:'Pitch',f:'pitch'},{h:'Coaches',f:s=>(s.coachIds||[]).map(cn).join(', '),k:['coachIds']}]));
+
+T.push(bkTable('Competitions','Leagues and tournaments',byKey(A.competitions,c=>c.start||''),[
+{h:'Name',f:'name'},{h:'Type',f:'kind'},{h:'Group',f:'group'},{h:'Location',f:'location'},{h:'Start',f:'start'},{h:'End',f:'end'},{h:'Status',f:'status'},{h:'Placement',f:'placement'}]));
+T.push(bkTable('Matches','Fixtures and results',byKey(A.matches,m=>(m.date||'')+(m.time||'')),[
+{h:'Date',f:'date'},{h:'Time',f:'time'},{h:'Competition',f:m=>K[m.competitionId]?K[m.competitionId].name:'',k:['competitionId']},{h:'Round',f:'round'},{h:'Opponent',f:'opponent'},
+{h:'Home or away',f:'homeAway'},{h:'Venue',f:'venue'},{h:'Status',f:'status'},{h:'Our score',f:'ourScore',t:'num'},{h:'Their score',f:'theirScore',t:'num'},{h:'Notes',f:'notes'}]));
+T.push(bkTable('Competition money','Entry fees, travel, player contributions and prizes',byKey(A.compPayments,x=>x.date||''),[
+{h:'Date',f:'date'},{h:'Competition',f:x=>K[x.competitionId]?K[x.competitionId].name:'',k:['competitionId']},{h:'In or out',f:x=>x.direction==='in'?'In':'Out',k:['direction']},
+{h:'Description',f:'label'},{h:'Player',f:x=>pn(x.playerId),k:['playerId']},{h:AM,f:'amount',t:'money'},{h:'Method',f:'method'}]));
+
+T.push(bkTable('Kit items','Apparel and kit for sale',byKey(A.apparelItems,x=>x.name||''),[
+{h:'Name',f:'name'},{h:'Category',f:'category'},{h:`Price (${cur})`,f:'price',t:'money'},{h:`Your cost (${cur})`,f:'cost',t:'money'},{h:'Sizes',f:'sizes'}]));
+T.push(bkTable('Kit orders','Every kit order, paid or still owed',byKey(A.apparelOrders,o=>o.date||''),[
+{h:'Date',f:'date'},{h:'Buyer',f:o=>o.playerId?pn(o.playerId):o.buyer||'',k:['playerId','buyer']},{h:'Group',f:o=>pg(o.playerId)},
+{h:'Item',f:o=>I[o.itemId]?I[o.itemId].name:'',k:['itemId']},{h:'Size',f:'size'},{h:'Qty',f:'qty',t:'num'},{h:`Unit price (${cur})`,f:'unitPrice',t:'money'},
+{h:`Total (${cur})`,f:o=>orderTotal(o),t:'money'},{h:`Paid (${cur})`,f:o=>orderPaid(o),t:'money'},{h:`Still owed (${cur})`,f:o=>Math.max(0,orderTotal(o)-orderPaid(o)),t:'money'},
+{h:'Delivered',f:'delivered'},{h:'Payments',f:o=>(o.payments||[]).map(p=>`${p.date||''} · ${num(p.amount)} · ${p.method||''}`).join('; '),k:['payments']},
+{h:'Invoice no.',f:'invoiceNo'},{h:'Invoice date',f:'invoiceDate'}]));
+
+T.push(bkTable('Progress notes','Coaching notes on each player',byKey(A.progress,x=>x.date||''),[
+{h:'Date',f:'date'},{h:'Player',f:x=>pn(x.playerId),k:['playerId']},{h:'Group',f:x=>pg(x.playerId)},{h:'Tag',f:'tag'},{h:'Note',f:'text'},{h:'By',f:x=>who(x.by),k:['by']},{h:'Saved at',f:'at'}]));
+T.push(bkTable('Skill ratings','Every skill rating, scored out of 10',byKey(A.ratings,x=>(x.date||'')+pn(x.playerId)),[
+{h:'Date',f:'date'},{h:'Player',f:x=>pn(x.playerId),k:['playerId']},{h:'Group',f:x=>pg(x.playerId)},
+...SKILLS.map(([k,l])=>({h:l,f:x=>(x.scores||{})[k],t:'num',k:['scores']})),
+{h:'Average',f:x=>{const v=SKILLS.map(([k])=>Number((x.scores||{})[k])).filter(isFinite);return v.length?Math.round(sum(v)/v.length*10)/10:''},t:'num'},
+{h:'By',f:x=>who(x.by),k:['by']},{h:'Saved at',f:'at'}]));
+
+T.push(bkTable('Announcements','Noticeboard posts for everyone and staff only',byKey([...A.announcements.map(a=>({...a,_aud:'Everyone'})),...A.staffAnnouncements.map(a=>({...a,_aud:'Staff only'}))],a=>a.date||'',-1),[
+{h:'Date',f:'date'},{h:'Who sees it',f:a=>a._aud},{h:'Title',f:'title'},{h:'Message',f:'body'},{h:'Pinned',f:'pinned'},{h:'By',f:x=>who(x.by),k:['by']},{h:'Saved at',f:'at'}]));
+T.push(bkTable('Tasks','Tasks you assigned and whether they are done',byKey(A.tasks,t=>t.due||''),[
+{h:'Title',f:'title'},{h:'Details',f:'detail'},{h:'Assigned to',f:t=>who(t.assignee),k:['assignee']},{h:'Due',f:'due'},{h:'Priority',f:'priority'},
+{h:'Done',f:t=>done[t.id]&&done[t.id].done?'Yes':'No'},{h:'Done at',f:t=>done[t.id]&&done[t.id].done?bkTime(done[t.id].at):''},{h:'By',f:x=>who(x.by),k:['by']},{h:'Saved at',f:'at'}]));
+
+const tally=m=>{const c={};A.potmVotes.forEach(v=>{const p=(v.votes||{})[m];if(p)c[p]=(c[p]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([p,n])=>`${pn(p)} (${n})`).join(', ')};
+T.push(bkTable('Player of the month','Nominees, votes and winners',byKey(A.potm,x=>x.month||x.id,-1),[
+{h:'Month',f:x=>x.month||x.id,k:['month']},{h:'Status',f:x=>x.status==='closed'?'Winner announced':x.status==='open'?'Voting open':x.status||'',k:['status']},
+{h:'Nominees',f:x=>(x.nominees||[]).map(pn).join(', '),k:['nominees','info']},{h:'Votes',f:x=>tally(x.month||x.id)},
+{h:'Winner',f:x=>x.winnerName||pn(x.winner),k:['winner','winnerName']},{h:'Citation',f:'citation'}]));
+
+const team=[...Object.values(Mb).map(m=>[who(m.id),m.email||'',ROLE_LABEL[m.role]||m.role||'',m.coachId?cn(m.coachId):'','Has access',bkTime(m.at),m.id]),
+...A.requests.map(r=>[r.name||'',r.email||'',ROLE_LABEL[r.role]||r.role||'','','Waiting for approval',bkTime(r.at),r.id])];
+T.push(bkPlain('Team','Staff accounts and access requests',['Person','Email','Role','Coach profile','Access','Since','Account ID'],[],team.sort(by(r=>r[4]+r[2]+r[0]))));
+
+const setVal=(k,v)=>k==='coachRates'&&v&&typeof v==='object'?Object.entries(v).map(([c,r])=>`${cn(c)}: ${r&&r.type==='monthly'?num(r.rate)+' a month':num(r&&r.rate)+' a session'}`).join('; '):k==='lastBackup'&&v&&v.date?v.date+(v.at?' '+bkTime(v.at).slice(11):''):bkVal(k,v);
+const set=[];[['Academy',acad],['Finance',finDoc]].forEach(([g,o])=>Object.keys(o).filter(k=>k!=='id').sort().forEach(k=>set.push([g,bkHuman(k),setVal(k,o[k])])));
+T.push(bkPlain('Settings','Academy details, fees, coach rates and invoice settings',['Area','Setting','Value'],[],set));
+return T;
+}
+
+/* exact copy of every record, split into cells of 30,000 characters */
+function bkRestoreSheet(A,meta){
+const CH=30000,rows=[];let maxParts=1;
+const add=(c,d)=>{const {id,...rest}=d;const s=JSON.stringify(rest);const parts=[];for(let i=0;i<s.length;i+=CH)parts.push(s.slice(i,i+CH));if(!parts.length)parts.push('{}');maxParts=Math.max(maxParts,parts.length);rows.push([c,String(id),...parts])};
+add('_backup',{id:'info',...meta});
+BK_COLS.forEach(c=>(A[c]||[]).forEach(d=>add(c,d)));
+A.config.forEach(d=>add('config',d));
+const head=['Collection','Record ID',...Array.from({length:maxParts},(_,i)=>i?'Data '+(i+1):'Data')];
+return {name:'Restore data',rows:[head.map(h=>({v:h,s:XST.head})),...rows],widths:[22,26,...head.slice(2).map(()=>80)],freeze:true,filter:null};
+}
+
+function bkSummarySheet(T,meta,failed){
+const rows=[[{v:`${cfg().name} — full backup`,s:XST.title}],
+[{v:`Downloaded ${fmtDateY(meta.date)} at ${fmtTime(meta.at)} by ${meta.byName}`,s:XST.muted}],[],
+[{v:'Sheet',s:XST.head},{v:'Records',s:XST.head},{v:'What’s in it',s:XST.head}],
+...T.map(t=>[{v:t.name,s:XST.bold},t.count,t.about]),
+[{v:'Restore data',s:XST.bold},meta.records,'An exact copy of every record. Leave this sheet unchanged so the app can be rebuilt from this file if ever needed.'],[]];
+if(failed.length)rows.push([{v:'Not included',s:XST.bold},'',`These couldn’t be read when the backup was made: ${failed.join(', ')}. Try the download again.`]);
+rows.push([{v:'Keep one copy each month somewhere safe, like your email or Google Drive. Each file holds everything, not just that month.',s:XST.muted}]);
+return {name:'Summary',rows,widths:[24,10,96],freeze:false,filter:null};
+}
+
+async function bkGather(){
+const A={config:[]},failed=[];
+await Promise.all([
+...BK_COLS.map(c=>Store.getCol(c).then(r=>{A[c]=r}).catch(e=>{console.warn('backup',c,e);A[c]=[];failed.push(c)})),
+...BK_DOCS.map(p=>Store.getDoc(p).then(d=>{if(d)A.config.push(d)}).catch(e=>{console.warn('backup',p,e);failed.push(p)}))]);
+return {A,failed};
+}
+async function bkWorkbook(A,failed){
+const at=Date.now(),meta={app:'Atelier XI',format:1,at,date:ds(new Date(at)),by:S.me.id||null,byName:S.email||(n=>!n||['You','—','Staff member'].includes(n)?'the owner':n)(personName(S.me.id)),records:0};
+meta.records=BK_COLS.reduce((n,c)=>n+(A[c]||[]).length,0)+A.config.length;
+const T=bkTables(A);
+return xlsxBlob([bkSummarySheet(T,meta,failed),...T.map(bkDataSheet),bkRestoreSheet(A,{app:meta.app,format:1,at,date:meta.date,by:meta.by})]);
+}
+const bkName=()=>`${(cfg().short||cfg().name||'Academy').replace(/[^\w-]+/g,'-').replace(/^-+|-+$/g,'')}-backup-${today()}.xlsx`;
+const lastBackup=()=>(D.finance||{}).lastBackup||null;
+function backupDue(){const lb=lastBackup();return !lb||!lb.date||monthOf(lb.date)<monthOf(today())}
+function backupPanel(){
+const lb=lastBackup(),busy=!!S.ui.bkBusy;
+return panel({title:'Backup',tight:false,body:`<p style="margin:0 0 14px;color:var(--fg-2);max-width:62ch">Download everything in the app as one Excel file: players, payments, expenses, attendance, coach sessions, competitions, kits, progress and settings. Keep one copy each month somewhere safe, like your email or Google Drive.</p>
+<div class="row"><button class="btn primary" data-act="backupNow" ${busy?'disabled aria-busy="true"':''}>${ICON.down} ${busy?'Preparing backup…':'Download backup'}</button><span class="muted small">${lb&&lb.date?`Last backup ${esc(fmtDateY(lb.date))}${lb.at?' at '+esc(fmtTime(lb.at)):''}`:'No backup downloaded yet'}</span></div>`});
+}
+ACT.backupNow=async()=>{
+if(S.ui.bkBusy)return;
+if(!PLATFORM.canDownload())return toast('Downloads aren’t available here.',true);
+S.ui.bkBusy=true;render();
+try{
+const {A,failed}=await bkGather();
+if(failed.length*2>BK_COLS.length+BK_DOCS.length)throw new Error('Most of the data couldn’t be read');
+const blob=await bkWorkbook(A,failed);
+await PLATFORM.download(bkName(),blob);
+try{await saveFinance({lastBackup:{date:today(),at:Date.now(),by:S.me.id||null}})}catch(e){}
+toast(failed.length?`Backup saved, but ${failed.length} part${failed.length>1?'s':''} couldn’t be read. See the Summary sheet.`:'Backup saved',!!failed.length);
+}catch(e){console.warn(e);if(!(e&&e.code==='declined'))toast('Couldn’t create the backup. Check your connection and try again.',true)}
+finally{S.ui.bkBusy=false;render()}
+};
+
+/* ============================================================
 ATELIER XI — standalone platform: Firebase Auth + Firestore
 Paste your Firebase web config below (Project settings → Your apps).
 ============================================================ */
@@ -1704,6 +1989,8 @@ update:(p,d)=>{const pairs=flat(d);if(!pairs.length)return Promise.resolve();con
 del:p=>settle(db.doc(p).delete()),
 add:async(col,d)=>{const r=db.collection(col).doc();await settle(r.set(d));return r.id},
 newId:col=>db.collection(col).doc().id,
+getCol:col=>db.collection(col).get().then(s=>s.docs.map(d=>({...d.data(),id:d.id}))).catch(e=>{throw fbErr(e)}),
+getDoc:p=>db.doc(p).get().then(s=>s.exists?{...s.data(),id:s.id}:null).catch(e=>{throw fbErr(e)}),
 };
 }
 function blobToDataURL(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('Couldn’t read that image.'));r.readAsDataURL(b)})}
