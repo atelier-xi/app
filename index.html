@@ -741,7 +741,7 @@ const t=tabs('coTab',[['report','Monthly report'],['confirm','Confirmations',pen
 let body='';
 if(t.cur==='report'){
 const rows=D.coaches.map(c=>({c,r:coachMonth(c.id),groups:[...new Set(D.sessions.filter(s=>coachOn(s,c.id)).map(s=>s.group))]}));
-body=`<div class="toolbar"><span class="muted small">A session counts once administration or the owner confirms the coach’s check-in. Tap a coach to tick their sessions on a calendar.</span>${PLATFORM.canDownload()&&rows.length?`<button class="btn" data-act="exportCoaches">${ICON.down} Export CSV</button>`:''}</div>
+body=`<div class="toolbar"><span class="muted small">A session counts once administration or the owner confirms the coach’s check-in. Tap a coach to tick their sessions on a calendar.</span>${PLATFORM.canDownload()&&rows.length?`<div class="row"><button class="btn" data-act="coachPdf">${ICON.pdf} PDF report</button><button class="btn" data-act="exportCoaches">${ICON.down} Export CSV</button></div>`:''}</div>
 ${panel({title:'Sessions given',count:fmtMonth(S.month),body:rows.length?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Coach</th><th>Groups</th><th class="r">Confirmed</th><th class="r">Pending</th><th class="r">Rejected</th><th class="r">Check-ins</th></tr></thead><tbody>${rows.map(({c,r,groups})=>`<tr class="click" data-act="openCoach" data-id="${c.id}"><td><div class="cell-name"><span class="av">${esc(initials(c.name))}</span><div><div class="t">${esc(c.name)}</div><div class="s">${esc(c.title||'')}</div></div></div></td><td>${groups.map(g=>`<span class="tag">${esc(g)}</span>`).join(' ')||'<span class="faint">—</span>'}</td><td class="r"><b style="font:600 22px var(--f-display)">${r.ok}</b></td><td class="r">${r.pending||'<span class="faint">0</span>'}</td><td class="r">${r.rejected||'<span class="faint">0</span>'}</td><td class="r">${r.total}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td></td><td class="r">${sum(rows,x=>x.r.ok)}</td><td class="r">${sum(rows,x=>x.r.pending)}</td><td class="r">${sum(rows,x=>x.r.rejected)}</td><td class="r">${sum(rows,x=>x.r.total)}</td></tr></tfoot></table></div>`:empty('No coaches yet','Add your coaching staff in the Coach list tab.')})}`;
 }else if(t.cur==='confirm'){
 const q=[];D.sessions.forEach(s=>Object.keys(s.coaches||{}).forEach(cid=>{if(s.coaches[cid])q.push({s,cid,st:coachStatus(s.id,cid),at:s.coaches[cid].at})}));
@@ -1516,7 +1516,7 @@ return `<div class="cp-card"><div class="cp-top"><span class="av">${esc(initials
 <div class="cp-mid"><div class="s">${pl.planned||pl.given?`${parts} <span class="muted">· ${pl.planned} planned this month${pl.matches?`, ${pl.matches} match${pl.matches>1?'es':''}`:''}</span>`:'<span class="muted">No sessions planned for this coach this month. Add them to the training schedule or a match.</span>'}</div>
 ${r.r&&!r.monthly&&r.expected?`<div class="cp-bar" aria-hidden="true"><i class="g" style="--p:${r.due/r.expected}"></i><i class="w" style="--p:${r.waitingPay/r.expected}"></i></div>`:''}</div>
 <div class="cp-foot"><span>${r.r?`Earned so far <b>${money(r.due)}</b>${r.waitingPay?` <span class="muted">+ ${money(r.waitingPay)} waiting</span>`:''} · Paid <b>${money(r.paid)}</b>`:''}</span>${st}<span class="sp"></span><button class="btn sm ghost" data-act="openCoach" data-id="${r.c.id}">Sessions</button>${r.bal>0?`<button class="btn sm primary" data-act="payCoach" data-c="${r.c.id}">Pay ${money(r.bal)}</button>`:''}</div></div>`};
-return `<div class="kpis">${kpi('Expected this month',money(tot('expected')),`If every planned session and match is given`)}${kpi('Earned so far',money(tot('due')),`Confirmed sessions${tot('waitingPay')?` · ${money(tot('waitingPay'))} waiting`:''}`)}${kpi(isNow?'Still to come':'Not given',money(tot('toCome')),isNow?`${sum(rows,r=>r.pl.upcoming)} sessions and matches left`:'Sessions planned but not given')}${kpi('Paid',money(tot('paid')),tot('bal')?`${money(tot('bal'))} still owed for sessions given`:'Nothing owed')}</div>
+return `<div class="toolbar"><span class="muted small">Planned sessions come from the training schedule and the matches each coach is assigned to.</span>${rows.length?`<button class="btn" data-act="coachPdf">${ICON.pdf} Download PDF</button>`:''}</div><div class="kpis">${kpi('Expected this month',money(tot('expected')),`If every planned session and match is given`)}${kpi('Earned so far',money(tot('due')),`Confirmed sessions${tot('waitingPay')?` · ${money(tot('waitingPay'))} waiting`:''}`)}${kpi(isNow?'Still to come':'Not given',money(tot('toCome')),isNow?`${sum(rows,r=>r.pl.upcoming)} sessions and matches left`:'Sessions planned but not given')}${kpi('Paid',money(tot('paid')),tot('bal')?`${money(tot('bal'))} still owed for sessions given`:'Nothing owed')}</div>
 ${panel({title:'Coach pay',count:fmtMonth(m),body:rows.length?`<div class="cp-list">${rows.map(card).join('')}</div>`:empty('No coaches','Add coaches on the Coaches page first.'),foot:anyRate?'Expected = sessions given + waiting + still to come, using each coach’s rate (a monthly salary stays the same). Earned so far counts confirmed sessions only. Paying a coach records it as a Coach pay expense for this month.':'Set each coach’s rate to see what you’ll owe them this month.'})}`;
 }
 function moneyYear(m){
@@ -1890,7 +1890,7 @@ const lab=st==='confirmed'?'confirmed':st==='pending'?'waiting for confirmation'
 return `<button class="cal-chip ${st} ${mine?'':'other'}" ${fut||!mg?'disabled':''} data-act="calTick" data-s="${s.id}" data-c="${c.id}" aria-pressed="${st==='confirmed'}" aria-label="${esc(fmtDay(ds))} ${esc(s.group)} ${esc(s.start||'')}, ${lab}">${st==='confirmed'?ICON.check:st==='pending'?'<i class="cal-dot"></i>':''}<span>${esc(s.start||'')}</span><span>${s.kind==='match'?'Match':esc(s.group)}</span></button>`}).join('')}</div>`});
 const cal=`<div class="cal-tools"><div class="row"><button class="ib" data-act="month" data-d="-1" aria-label="Previous month">‹</button><b class="cal-m">${esc(fmtMonth(S.month))}</b><button class="ib" data-act="month" data-d="1" aria-label="Next month">›</button></div>
 ${chips('calAll',[['','Their sessions'],['1','All sessions']],'','Which sessions')}</div>
-${mg?`<div class="row">${todo.length?`<button class="btn primary sm" data-act="calTickAll" data-c="${c.id}">${ICON.check} Tick all their scheduled sessions · ${todo.length}</button>`:''}${r.pending?`<button class="btn sm" data-act="confirmCoachAll" data-c="${c.id}">Confirm ${r.pending} waiting</button>`:''}</div>`:''}
+${mg?`<div class="row">${todo.length?`<button class="btn primary sm" data-act="calTickAll" data-c="${c.id}">${ICON.check} Tick all their scheduled sessions · ${todo.length}</button>`:''}${r.pending?`<button class="btn sm" data-act="confirmCoachAll" data-c="${c.id}">Confirm ${r.pending} waiting</button>`:''}${PLATFORM.canDownload()?`<button class="btn sm" data-act="coachPdf" data-c="${c.id}">${ICON.pdf} PDF</button>`:''}</div>`:''}
 <div class="cal-head" aria-hidden="true">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(x=>`<span>${x}</span>`).join('')}</div>
 <div class="cal-grid">${cells}</div>
 <div class="cal-legend"><span><i class="cal-chip confirmed sw">${ICON.check}</i>Counted</span><span><i class="cal-chip pending sw"><i class="cal-dot"></i></i>Checked in, waiting</span><span><i class="cal-chip off sw"></i>Not ticked</span><span><i class="cal-chip off other sw"></i>Not their usual session</span></div>`;
@@ -3223,7 +3223,8 @@ cols.forEach(c=>{const v=c.v(r);const font=`${c.b?600:500} ${c.fs||19}px ${CP_F.
 W.y+=RH;line(CP_M,W.y,R,W.y)});
 if(o.total){if(W.y+RH>BOT){W.page();head()}cols.forEach(c=>{const v=o.total(c);if(v==null)return;const font=`600 19px ${CP_F.b}`;const ax=c.a==='right'?c.x+c.px-10:c.x+6;text(fit(v,font,c.px-14),ax,W.y+RH/2+7,font,CP_C.NAVY,c.a||'left')});W.y+=RH;line(CP_M,W.y,R,W.y,CP_C.NAVY,2)}
 W.y+=26};
-W.note=(s)=>{W.need(40);text(fit(s,`500 18px ${CP_F.b}`,R-CP_M),CP_M,W.y+20,`500 18px ${CP_F.b}`,CP_C.MUTED);W.y+=46};
+W.note=(s)=>{const font=`500 18px ${CP_F.b}`;g.font=font;const lines=[];let cur='';String(s).split(' ').forEach(w=>{const t=cur?cur+' '+w:w;if(g.measureText(t).width>R-CP_M&&cur){lines.push(cur);cur=w}else cur=t});if(cur)lines.push(cur);
+W.need(18+lines.length*26);lines.forEach((l,i)=>text(l,CP_M,W.y+20+i*26,font,CP_C.MUTED));W.y+=20+lines.length*26+20};
 W.finish=()=>{const n=pages.length;pages.forEach((cv,i)=>{g=cv.getContext('2d');line(CP_M,CP_H-104,R,CP_H-104,CP_C.NAVY,2);text(fit(`${String(cfg().short||'').toUpperCase()} · ${String(cfg().slogan||'').toUpperCase()}`,`500 14px ${CP_F.m}`,700),CP_M,CP_H-74,`500 14px ${CP_F.m}`,CP_C.MUTED,'left',3);text(`PAGE ${i+1} OF ${n}`,R,CP_H-74,`500 14px ${CP_F.m}`,CP_C.MUTED,'right',2)});return pages};
 return W;
 }
@@ -3319,6 +3320,74 @@ idList.sort(by(x=>x.p.name));if(!idList.length)toast('No player IDs on file for 
 const cvs=await drawCompPdf({blocks,squads:!!f.squads,matches:!!f.matches,money:!!f.money,heading,sub,run:sub.toUpperCase(),idList});
 const blob=pagesToPdf(cvs,nm);
 try{await PLATFORM.download(nm.replace(/[\\/:*?"<>|]+/g,' ')+'.pdf',blob);toast('PDF saved')}catch(e){if(e&&e.code!=='declined')throw e}
+}});
+};
+
+/* ============================================================
+ATELIER XI — Coach report PDF: the month for every coach (or one),
+with planned / given / waiting / to come / missed sessions and pay.
+Uses the shared page writer from pages-comppdf.js.
+============================================================ */
+const CPAY_ST={confirmed:['Given',CP_C.OK],pending:['Waiting','#9A6610'],rejected:['Rejected',CP_C.BAD],missed:['Missed',CP_C.BAD],upcoming:['To come',CP_C.MUTED]};
+const cpRateLabel=r=>!r.r?'No rate':r.monthly?`${money(r.rate)} / month`:`${money(r.rate)} / session`;
+function cpStats(W,items){
+const g=W.g();const n=items.length;const gap=12;const bw=(W.R-CP_M-gap*(n-1))/n;W.need(110);
+items.forEach(([k,v,tone,hl],i)=>{const x=CP_M+i*(bw+gap);
+g.fillStyle=hl?CP_C.NAVY:CP_C.SOFT;g.fillRect(x,W.y,bw,92);
+W.text(W.fit(String(v),`600 34px ${CP_F.b}`,bw-24),x+14,W.y+46,`600 34px ${CP_F.b}`,hl?'#FFFFFF':(tone||CP_C.INK));
+W.text(W.fit(k.toUpperCase(),`500 13px ${CP_F.m}`,bw-24),x+14,W.y+76,`500 13px ${CP_F.m}`,hl?'rgba(255,255,255,.8)':CP_C.MUTED,'left',1.5)});
+W.y+=118;
+}
+async function drawCoachPdf(o){
+await invFonts();const month=fmtMonth(S.month);
+const W=cpWriter(`COACH REPORT · ${month.toUpperCase()}`);W.page();await cpCover(W,'Coach report',o.sub);
+const rows=o.rows;
+// summary of every coach in the report
+const cols=[{h:'COACH',w:24,b:true,v:r=>r.c.name},{h:'PLANNED',w:9,a:'right',v:r=>String(r.pl.planned)},{h:'GIVEN',w:8,a:'right',b:true,v:r=>String(r.pl.given),tone:()=>CP_C.OK},{h:'WAITING',w:9,a:'right',v:r=>String(r.pl.waiting)},{h:'TO COME',w:9,a:'right',v:r=>String(r.pl.upcoming)},{h:'MISSED',w:8,a:'right',v:r=>String(r.pl.missed),tone:r=>r.pl.missed?CP_C.BAD:null}];
+if(o.pay)cols.push({h:'EARNED',w:10,a:'right',v:r=>r.r?money(r.due):'—'},{h:'EXPECTED',w:11,a:'right',b:true,v:r=>r.r?money(r.expected):'—'},{h:'PAID',w:9,a:'right',v:r=>money(r.paid)});
+const tot=k=>sum(rows,r=>r.pl[k]);
+W.text('SUMMARY',CP_M,W.y+10,`600 28px ${CP_F.d}`,CP_C.NAVY,'left',3);W.y+=40;
+W.table(cols,rows,{total:c=>({COACH:'Total',PLANNED:String(tot('planned')),GIVEN:String(tot('given')),WAITING:String(tot('waiting')),'TO COME':String(tot('upcoming')),MISSED:String(tot('missed')),EARNED:money(sum(rows,r=>r.due)),EXPECTED:money(sum(rows,r=>r.expected)),PAID:money(sum(rows,r=>r.paid))})[c.h]??null});
+if(o.pay)W.note('Expected = sessions given + waiting + still to come at each coach’s rate. A monthly salary stays the same. Missed and rejected sessions aren’t paid.');
+// one section per coach
+rows.forEach((r,i)=>{
+if(rows.length>1||o.sessions)W.page();
+const g=W.g();W.need(200);g.fillStyle=CP_C.NAVY;g.fillRect(CP_M,W.y,W.R-CP_M,76);
+W.text(W.fit(r.c.name.toUpperCase(),`600 40px ${CP_F.d}`,640),CP_M+22,W.y+52,`600 40px ${CP_F.d}`,'#FFFFFF','left',2);
+W.text(W.fit([r.c.title||'',o.pay?cpRateLabel(r):''].filter(Boolean).join('  ·  '),`500 20px ${CP_F.b}`,W.R-CP_M-700),W.R-22,W.y+48,`500 20px ${CP_F.b}`,'#FFFFFF','right');W.y+=100;
+const groups=[...new Set(r.pl.rows.filter(x=>!x.match).map(x=>x.s.group).filter(Boolean))];
+if(groups.length||r.c.phone){W.text(W.fit([groups.length?'Groups: '+groups.join(', '):'',r.c.phone?'Phone: '+r.c.phone:''].filter(Boolean).join('   ·   '),`500 19px ${CP_F.b}`,W.R-CP_M),CP_M,W.y,`500 19px ${CP_F.b}`,CP_C.MUTED);W.y+=30}
+cpStats(W,[['Planned',r.pl.planned],['Given',r.pl.given,CP_C.OK],['Waiting',r.pl.waiting],['To come',r.pl.upcoming],['Missed',r.pl.missed,r.pl.missed?CP_C.BAD:null]]);
+if(o.pay&&r.r)cpStats(W,[['Earned so far',money(r.due)],['Waiting + to come',money(r.toCome+r.waitingPay)],['Paid',money(r.paid)],['Expected this month',money(r.expected),null,true]]);
+if(o.sessions){
+W.text('SESSIONS',CP_M,W.y+10,`600 26px ${CP_F.d}`,CP_C.NAVY,'left',3);W.y+=40;
+const ss=r.pl.rows.slice().sort(by(x=>x.ds+(x.s.start||'')));
+if(ss.length)W.table([{h:'DATE',w:13,v:x=>fmtDate(x.ds)},{h:'DAY',w:7,v:x=>DAY_SHORT[parseD(x.ds).getDay()]},{h:'SESSION',w:27,b:true,v:x=>(x.match?`Match ${x.s.title||''}${x.s.group?' · '+x.s.group:''}`:x.s.group||'Session')+(x.planned?'':' (covered)')},{h:'TIME',w:14,v:x=>(x.s.start||'')+(x.s.end?'–'+x.s.end:'')},{h:'PITCH',w:19,v:x=>x.s.pitch||''},{h:'STATUS',w:12,b:true,v:x=>CPAY_ST[x.st][0],tone:x=>CPAY_ST[x.st][1]}],ss);
+else W.note('No sessions planned or given this month.');
+}
+if(o.pay){
+const px=D.expenses.filter(x=>x.month===S.month&&x.category==='Coach pay'&&x.coachId===r.c.id).sort(by(x=>x.date||''));
+W.need(120);W.text('PAYMENTS',CP_M,W.y+10,`600 26px ${CP_F.d}`,CP_C.NAVY,'left',3);W.y+=40;
+if(px.length)W.table([{h:'PAID ON',w:16,v:x=>fmtDate(x.date)},{h:'DESCRIPTION',w:44,b:true,v:x=>x.label||'Coach pay'},{h:'METHOD',w:16,v:x=>x.method||''},{h:'AMOUNT',w:14,a:'right',b:true,v:x=>money(x.amount)}],px,{total:c=>c.h==='PAID ON'?'Total':c.h==='AMOUNT'?money(sum(px,x=>x.amount)):null});
+else W.note(`Nothing paid yet for ${month}.${r.bal>0?` ${money(r.bal)} owed for sessions given.`:''}`);
+}
+});
+return W.finish();
+}
+ACT.coachPdf=d=>{
+if(!PLATFORM.canDownload())return toast('Downloads aren’t available here.',true);
+if(!D.coaches.length)return toast('Add coaches first.',true);
+const one=d.c?byId(D.coaches,d.c):null;
+const scopes=[...(one?[['one',one.name]]:[]),['all','All coaches']];
+modal({title:'Coach report PDF',submit:'Download PDF',body:`<p class="muted small" style="margin:0">${esc(fmtMonth(S.month))}. Change the month at the top of the page first if you need another one.</p>
+${fld('Who',radios('scope',scopes,scopes[0][0]))}
+${fld('Include',`<div class="cp-checks"><label class="check"><input type="checkbox" name="sessions" checked> Every session with its date and status</label><label class="check"><input type="checkbox" name="pay" checked> Pay: rate, earned, expected and payments</label></div>`,'Untick pay to make a copy you can give the coach without the money.')}`,
+onSubmit:async f=>{
+const all=coachPayRows(S.month);const rows=f.scope==='one'&&one?all.filter(r=>r.c.id===one.id):all;
+const short=cfg().short||'Academy';const nm=`${short} - Coach report - ${f.scope==='one'&&one?one.name+' - ':''}${fmtMonth(S.month)}`;
+toast('Making the PDF…');
+const cvs=await drawCoachPdf({rows,sessions:!!f.sessions,pay:!!f.pay,sub:`${f.scope==='one'&&one?one.name:`${rows.length} coach${rows.length===1?'':'es'}`} · ${fmtMonth(S.month)}`});
+try{await PLATFORM.download(nm.replace(/[\\/:*?"<>|]+/g,' ')+'.pdf',pagesToPdf(cvs,nm));toast('PDF saved')}catch(e){if(e&&e.code!=='declined')throw e}
 }});
 };
 
