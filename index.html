@@ -1475,6 +1475,10 @@ ATELIER XI — Money in & out: expenses, coach pay, profit
 ============================================================ */
 const EXP_CATS=['Coach pay','Pitch rental','Equipment','Kit stock','Transport','Marketing','Utilities','Other'];
 const coachRate=cid=>(((D.finance||{}).coachRates)||{})[cid]||null;
+/* special per-session pay for an age group (e.g. 2011/12 ADV = $25), for every coach paid per session */
+const groupRates=()=>(((D.finance||{}).groupRates)||{});
+const groupRateOf=g=>{const v=groupRates()[g];return v==null||v===''?null:num(v)};
+function sessRate(cid,s){const r=coachRate(cid);if(r&&r.type==='monthly')return 0;const g=groupRateOf(s&&s.group);if(g!=null)return g;return r?num(r.rate):0}
 const expIn=m=>D.expenses.filter(x=>x.month===m);
 const compInM=m=>sum(D.compPayments.filter(x=>monthOf(x.date)===m&&x.direction!=='out'),x=>x.amount);
 const compOutM=m=>sum(D.compPayments.filter(x=>monthOf(x.date)===m&&x.direction==='out'),x=>x.amount);
@@ -1499,10 +1503,12 @@ return {rows,planned:rows.filter(r=>r.planned).length,given:n('confirmed'),waiti
 }
 function coachPayRows(m){
 return D.coaches.map(c=>{const r=coachRate(c.id);const cm=coachMonth(c.id);const pl=coachPlan(c.id);const rate=r?num(r.rate):0;const monthly=!!r&&r.type==='monthly';
-const due=!r?0:monthly?rate:cm.ok*rate;
-const expected=!r?0:monthly?rate:(pl.given+pl.waiting+pl.upcoming)*rate;
+const sr=st=>sum(pl.rows.filter(x=>x.st===st),x=>sessRate(c.id,x.s));
+const due=monthly?rate:sum(cm.rows.filter(x=>x.st==='confirmed'),x=>sessRate(c.id,x.s));
+const special=monthly?[]:[...new Set(pl.rows.map(x=>x.s.group).filter(g=>groupRateOf(g)!=null))].map(g=>[g,groupRateOf(g)]);
 const paid=sum(D.expenses.filter(x=>x.month===m&&x.category==='Coach pay'&&x.coachId===c.id),x=>x.amount);
-return {c,r,rate,monthly,pl,sessions:cm.ok,pending:cm.pending,due,expected,waitingPay:monthly?0:pl.waiting*rate,toCome:monthly?0:pl.upcoming*rate,paid,bal:Math.max(0,due-paid)}}).sort(by(x=>x.c.name));
+const waitingPay=monthly?0:sr('pending'),toCome=monthly?0:sr('upcoming');const expected=monthly?rate:due+waitingPay+toCome;
+return {c,r:r||(special.length?{type:'session',rate:0,groupOnly:true}:null),rate,monthly,special,pl,sessions:cm.ok,pending:cm.pending,due,expected,waitingPay,toCome,paid,bal:Math.max(0,due-paid)}}).sort(by(x=>x.c.name));
 }
 const coachPayDue=m=>sum(coachPayRows(m),x=>x.bal);
 function missingRecurring(m){
@@ -1548,12 +1554,13 @@ const rows=coachPayRows(m);const anyRate=rows.some(r=>r.r);const isNow=m===month
 const tot=k=>sum(rows,r=>r[k]);
 const card=r=>{const pl=r.pl;const st=!r.r?'<span class="pill plain">No rate set</span>':r.due<=0?'<span class="pill plain">Nothing due yet</span>':r.paid>=r.due?'<span class="pill ok">Paid</span>':r.paid>0?'<span class="pill warn">Part paid</span>':'<span class="pill bad">Not paid</span>';
 const parts=[`<b>${pl.given}</b> given`,pl.waiting?`${pl.waiting} waiting`:'',pl.upcoming?`${pl.upcoming} to come${pl.upMatches?` (${pl.upMatches} match${pl.upMatches>1?'es':''})`:''}`:'',pl.missed?`${pl.missed} missed`:''].filter(Boolean).join(' · ');
-return `<div class="cp-card"><div class="cp-top"><span class="av">${esc(initials(r.c.name))}</span><div class="grow"><div class="t">${esc(r.c.name)}</div><div class="s">${r.r?(r.monthly?`${money(r.rate)} a month`:`${money(r.rate)} a session`):'No pay rate yet'} · <button class="link" data-act="setRate" data-c="${r.c.id}">${r.r?'Change':'Set rate'}</button></div></div>
+return `<div class="cp-card"><div class="cp-top"><span class="av">${esc(initials(r.c.name))}</span><div class="grow"><div class="t">${esc(r.c.name)}</div><div class="s">${r.r&&!r.r.groupOnly?(r.monthly?`${money(r.rate)} a month`:`${money(r.rate)} a session`):'No pay rate yet'}${r.special.length?' · '+r.special.map(([g,v])=>`${esc(g)} ${money(v)}`).join(' · '):''} · <button class="link" data-act="setRate" data-c="${r.c.id}">${r.r&&!r.r.groupOnly?'Change':'Set rate'}</button></div></div>
 <div class="cp-exp"><span>Expected</span><b>${r.r?money(r.expected):'—'}</b></div></div>
 <div class="cp-mid"><div class="s">${pl.planned||pl.given?`${parts} <span class="muted">· ${pl.planned} planned this month${pl.matches?`, ${pl.matches} match${pl.matches>1?'es':''}`:''}</span>`:'<span class="muted">No sessions planned for this coach this month. Add them to the training schedule or a match.</span>'}</div>
 ${r.r&&!r.monthly&&r.expected?`<div class="cp-bar" aria-hidden="true"><i class="g" style="--p:${r.due/r.expected}"></i><i class="w" style="--p:${r.waitingPay/r.expected}"></i></div>`:''}</div>
 <div class="cp-foot"><span>${r.r?`Earned so far <b>${money(r.due)}</b>${r.waitingPay?` <span class="muted">+ ${money(r.waitingPay)} waiting</span>`:''} · Paid <b>${money(r.paid)}</b>`:''}</span>${st}<span class="sp"></span><button class="btn sm ghost" data-act="openCoach" data-id="${r.c.id}">Sessions</button>${r.bal>0?`<button class="btn sm primary" data-act="payCoach" data-c="${r.c.id}">Pay ${money(r.bal)}</button>`:''}</div></div>`};
 return `<div class="toolbar"><span class="muted small">Planned sessions come from the training schedule and the matches each coach is assigned to.</span>${rows.length?`<button class="btn" data-act="coachPdf">${ICON.pdf} Download PDF</button>`:''}</div><div class="kpis">${kpi('Expected this month',money(tot('expected')),`If every planned session and match is given`)}${kpi('Earned so far',money(tot('due')),`Confirmed sessions${tot('waitingPay')?` · ${money(tot('waitingPay'))} waiting`:''}`)}${kpi(isNow?'Still to come':'Not given',money(tot('toCome')),isNow?`${sum(rows,r=>r.pl.upcoming)} sessions and matches left`:'Sessions planned but not given')}${kpi('Paid',money(tot('paid')),tot('bal')?`${money(tot('bal'))} still owed for sessions given`:'Nothing owed')}</div>
+${(()=>{const gr=Object.entries(groupRates()).filter(([,v])=>v!==''&&v!=null);return panel({title:'Rate per age group',actions:`<button class="btn sm" data-act="setGroupRate">${ICON.plus} Set a group rate</button>`,tight:false,body:gr.length?`<div class="chips">${gr.map(([g,v])=>`<button class="chip on" data-act="setGroupRate" data-g="${esc(g)}">${esc(g)} · ${money(v)} a session ${ICON.edit}</button>`).join('')}</div>`:'<p class="muted small" style="margin:0">Every session is paid at the coach’s own rate. Set a group rate to pay a different amount for one age group’s sessions, whoever coaches them.</p>',foot:gr.length?'Group rates replace the coach’s per-session rate for that group’s sessions and matches. Coaches on a monthly salary aren’t affected.':''})})()}
 ${panel({title:'Coach pay',count:fmtMonth(m),body:rows.length?`<div class="cp-list">${rows.map(card).join('')}</div>`:empty('No coaches','Add coaches on the Coaches page first.'),foot:anyRate?'Expected = sessions given + waiting + still to come, using each coach’s rate (a monthly salary stays the same). Earned so far counts confirmed sessions only. Paying a coach records it as a Coach pay expense for this month.':'Set each coach’s rate to see what you’ll owe them this month.'})}`;
 }
 function moneyYear(m){
@@ -1618,6 +1625,12 @@ delExpense:d=>{$$('.scrim').pop()?.remove();confirmBox('Delete expense','Delete 
 copyRecurring:async()=>{const m=S.month;const miss=missingRecurring(m);if(!miss.length)return;const date=m===monthOf(today())?today():m+'-01';let n=0;
 for(const x of miss){try{await W(()=>Store.add('expenses',{category:x.category,amount:num(x.amount),label:x.label||'',month:m,date,method:x.method||'Cash',note:'',recurring:true,coachId:x.coachId||null,...stamp()}));n++}catch(e){}}
 if(n)toast(`Added ${n} regular cost${n>1?'s':''} to ${fmtMonthName(m)}`)},
+setGroupRate:d=>{const cur=d.g?groupRateOf(d.g):null;const gs=cfg().groups;
+modal({title:d.g?'Group rate · '+d.g:'Set a group rate',body:`${fld('Age group',sel('g',gs.map(g=>[g,g]),d.g||gs[0]))}${fld('Pay per session ('+esc(fin().currency)+')',inp('rate',cur??'','number','min="0" step="0.01" placeholder="e.g. 25"'),'Used instead of the coach’s own per-session rate for this group’s sessions and matches.')}`,
+extra:d.g?`<button type="button" class="btn ghost" data-act="clearGroupRate" data-g="${esc(d.g)}">Remove</button>`:'',
+onSubmit:async f=>{if(!(num(f.rate)>0))return 'Enter an amount above zero.';const gr={...groupRates()};if(d.g&&d.g!==f.g)delete gr[d.g];gr[f.g]=num(f.rate);await saveFinance({groupRates:gr},`${f.g} sessions now paid ${money(num(f.rate))}`)}});
+},
+clearGroupRate:d=>{$$('.scrim').pop()?.remove();const gr={...groupRates()};delete gr[d.g];saveFinance({groupRates:gr},`${d.g} back to each coach’s own rate`).catch(()=>{})},
 setRate:d=>{const r=coachRate(d.c)||{type:'session',rate:''};
 modal({title:'Pay rate · '+coachName(d.c),body:`${fld('How they’re paid',radios('type',[['session','Per confirmed session'],['monthly','Fixed monthly salary']],r.type))}${fld('Amount ('+esc(fin().currency)+')',inp('rate',r.rate,'number','min="0" step="0.01"'))}`,
 extra:coachRate(d.c)?`<button type="button" class="btn ghost" data-act="clearRate" data-c="${d.c}">Remove rate</button>`:'',
@@ -1923,8 +1936,8 @@ else{await writeSession(desc,{coaches:{[cid]:null}});if(D.confirmations[s.id]&&D
 DRAWERS.coach={render(d){
 const c=byId(D.coaches,d.id);if(!c)return null;const r=coachMonth(c.id);const mg=isMgmt();const t=today();
 const all=!!S.ui.calAll;const days=coachCalDays(c.id,all);
-const rate=typeof coachRate==='function'?coachRate(c.id):null;const due=!rate?null:rate.type==='monthly'?num(rate.rate):r.ok*num(rate.rate);
-const pl=coachPlan(c.id);const exp=!rate?null:rate.type==='monthly'?num(rate.rate):(pl.given+pl.waiting+pl.upcoming)*num(rate.rate);
+const pr=mg&&typeof coachPayRows==='function'?coachPayRows(S.month).find(x=>x.c.id===c.id):null;const due=pr&&pr.r?pr.due:null;
+const pl=coachPlan(c.id);const exp=pr&&pr.r?pr.expected:null;
 const todo=calTodo(c.id);
 const lead=(parseD(S.month+'-01').getDay()+6)%7;
 let cells='';for(let i=0;i<lead;i++)cells+='<div class="cal-cell cal-pad" aria-hidden="true"></div>';
@@ -3373,7 +3386,7 @@ with planned / given / waiting / to come / missed sessions and pay.
 Uses the shared page writer from pages-comppdf.js.
 ============================================================ */
 const CPAY_ST={confirmed:['Given',CP_C.OK],pending:['Waiting','#9A6610'],rejected:['Rejected',CP_C.BAD],missed:['Missed',CP_C.BAD],upcoming:['To come',CP_C.MUTED]};
-const cpRateLabel=r=>!r.r?'No rate':r.monthly?`${money(r.rate)} / month`:`${money(r.rate)} / session`;
+const cpRateLabel=r=>(!r.r||r.r.groupOnly?(r.special&&r.special.length?'':'No rate'):r.monthly?`${money(r.rate)} / month`:`${money(r.rate)} / session`)+(r.special&&r.special.length?(r.r&&!r.r.groupOnly?' · ':'')+r.special.map(([g,v])=>`${g} ${money(v)}`).join(' · '):'');
 function cpStats(W,items){
 const g=W.g();const n=items.length;const gap=12;const bw=(W.R-CP_M-gap*(n-1))/n;W.need(110);
 items.forEach(([k,v,tone,hl],i)=>{const x=CP_M+i*(bw+gap);
@@ -3406,7 +3419,7 @@ if(o.pay&&r.r)cpStats(W,[['Earned so far',money(r.due)],['Waiting + to come',mon
 if(o.sessions){
 W.text('SESSIONS',CP_M,W.y+10,`600 26px ${CP_F.d}`,CP_C.NAVY,'left',3);W.y+=40;
 const ss=r.pl.rows.slice().sort(by(x=>x.ds+(x.s.start||'')));
-if(ss.length)W.table([{h:'DATE',w:13,v:x=>fmtDate(x.ds)},{h:'DAY',w:7,v:x=>DAY_SHORT[parseD(x.ds).getDay()]},{h:'SESSION',w:27,b:true,v:x=>(x.match?`Match ${x.s.title||''}${x.s.group?' · '+x.s.group:''}`:x.s.group||'Session')+(x.planned?'':' (covered)')},{h:'TIME',w:14,v:x=>(x.s.start||'')+(x.s.end?'–'+x.s.end:'')},{h:'PITCH',w:19,v:x=>x.s.pitch||''},{h:'STATUS',w:12,b:true,v:x=>CPAY_ST[x.st][0],tone:x=>CPAY_ST[x.st][1]}],ss);
+if(ss.length)W.table([{h:'DATE',w:13,v:x=>fmtDate(x.ds)},{h:'DAY',w:7,v:x=>DAY_SHORT[parseD(x.ds).getDay()]},{h:'SESSION',w:27,b:true,v:x=>(x.match?`Match ${x.s.title||''}${x.s.group?' · '+x.s.group:''}`:x.s.group||'Session')+(x.planned?'':' (covered)')},{h:'TIME',w:14,v:x=>(x.s.start||'')+(x.s.end?'–'+x.s.end:'')},{h:'PITCH',w:o.pay?13:19,v:x=>x.s.pitch||''},{h:'STATUS',w:12,b:true,v:x=>CPAY_ST[x.st][0],tone:x=>CPAY_ST[x.st][1]},...(o.pay&&!r.monthly?[{h:'PAY',w:8,a:'right',v:x=>['confirmed','pending','upcoming'].includes(x.st)?money(sessRate(r.c.id,x.s)):'—'}]:[])],ss);
 else W.note('No sessions planned or given this month.');
 }
 if(o.pay){
