@@ -43,7 +43,7 @@ const DAY_LONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sat
 const DAY_LETTER=['S','M','T','W','T','F','S'];
 const WEEK=[1,2,3,4,5,6,0];
 const POSITIONS=['Goalkeeper','Defender','Midfielder','Forward'];
-const SKILLS=[['technique','Technique'],['passing','Passing'],['shooting','Shooting'],['dribbling','Dribbling'],['speed','Speed'],['stamina','Stamina'],['positioning','Positioning'],['attitude','Attitude']];
+const SKILLS=[['technique','Receiving'],['passing','Passing'],['shooting','Shooting'],['dribbling','Dribbling'],['speed','Speed'],['stamina','Stamina'],['positioning','Positioning'],['attitude','Attitude']];
 const METHODS=['Cash','Bank transfer','Card','OMT','Whish'];
 const APPAREL_CATS=['Match kit','Training kit','Tracksuit','Jacket','Socks','Bag','Other'];
 const COMP_KINDS=['League','Tournament','Cup','Friendly'];
@@ -919,7 +919,7 @@ const cur=rs[0]&&rs[0].scores,prev=rs[1]&&rs[1].scores;
 const notes=D.progress.slice().sort(by(n=>n.date+String(n.at||''),-1));
 const pd=pfData(p);const can=canRate(p);
 if(!can&&!isMgmt())return `<div class="panel" style="margin-top:12px"><div class="panel-b">${empty('Not your team',`You can see and rate the players of your teams only (${esc(myCoachGroups().join(', ')||'none yet')}).`)}</div></div>`;
-return `<div class="between pf-bar"><span class="muted small">${pd?`Last rated ${esc(fmtDateY(pd.cur.date))} · ${rs.length||1} rating${(rs.length||1)===1?'':'s'}`:'Not rated yet'}</span><div class="row">${pd&&PLATFORM.canDownload()?`<button class="btn sm" data-act="pfPdf" data-p="${p.id}" title="Two-page profile to send to the parents">${ICON.pdf} PDF for parents</button>`:''}${can?`<button class="btn sm primary" data-act="rate" data-p="${p.id}">${ICON.plus} Rate</button>`:''}</div></div>
+return `<div class="between pf-bar"><span class="muted small">${pd?`${rs.length||1} rating${(rs.length||1)===1?'':'s'}`:'Not rated yet'}</span><div class="row">${pd&&PLATFORM.canDownload()?`<button class="btn sm" data-act="pfPdf" data-p="${p.id}" title="Two-page profile to send to the parents">${ICON.pdf} PDF for parents</button>`:''}${can?`<button class="btn sm primary" data-act="rate" data-p="${p.id}">${ICON.plus} Rate</button>`:''}</div></div>
 ${pfShareBar(p)}
 ${pd?pfSheet(p,pd):`<div class="panel" style="margin:12px 0 16px"><div class="panel-b">${empty('Not rated yet','Rate eight skills from 1 to 10. The performance profile, the rank in the group and the skill rings appear here, and every new rating is compared with the last one.',can?`<button class="btn primary" data-act="rate" data-p="${p.id}">${ICON.plus} Rate</button>`:'')}</div></div>`}
 ${panel({title:'Progress notes',count:notes.length,actions:can?`<button class="btn sm primary" data-act="addNote" data-p="${p.id}">${ICON.plus} Add note</button>`:'',body:notes.length?notes.map(n=>`<div class="note"><div class="meta">${esc(fmtDateY(n.date))} · ${esc(personName(n.by))}${n.tag?` · <span class="tag">${esc(n.tag)}</span>`:''}<span class="sp"></span>${isMgmt()||(can&&n.by===S.me.id)?`<button class="btn sm ghost danger" data-act="delNote" data-id="${n.id}">Delete</button>`:''}</div><p>${esc(n.text)}</p></div>`).join(''):empty('No notes yet','Write short observations after sessions and matches to track development over time.')})}
@@ -4011,7 +4011,7 @@ const PF_AREAS=[
 {k:'tech',name:'Technical',code:'T',skills:['technique','passing','shooting','dribbling']},
 {k:'phys',name:'Physical',code:'P',skills:['speed','stamina']},
 {k:'ment',name:'Tactical & mental',code:'M',skills:['positioning','attitude']}];
-const PF_INFO={technique:'First touch and ball control with both feet',passing:'Short and long passes: accuracy and weight',shooting:'Finishing: power, placement and technique',dribbling:'Close control and beating a player 1 v 1',speed:'Acceleration and top speed, with and without the ball',stamina:'Work rate from the first minute to the last',positioning:'Reading the game and moving into the right space',attitude:'Effort, focus, listening and teamwork'};
+const PF_INFO={technique:'First touch: receiving and controlling the ball',passing:'Short and long passes: accuracy and weight',shooting:'Finishing: power, placement and technique',dribbling:'Close control and beating a player 1 v 1',speed:'Acceleration and top speed, with and without the ball',stamina:'Work rate from the first minute to the last',positioning:'Reading the game and moving into the right space',attitude:'Effort, focus, listening and teamwork'};
 /* footballer silhouettes in a 48 × 48 box, facing right: head h, neck n, pelvis p,
 arms a1 (far) / a2 (near) [elbow, hand], legs l1 / l2 [knee, ankle, toe],
 ball, extra marks x [path, dash, filled]. Limbs are tapered filled shapes. */
@@ -4181,9 +4181,9 @@ const card=s=>`<article class="pf-card"><div class="pf-ch"><span class="pf-code"
 ${team?`<div class="pf-cmp"><div><span>Average</span><b>${pfFmt(s.avg)}</b></div><div><span>Best</span><b class="b">${pfFmt(s.best)}</b></div></div>`:''}</article>`;
 return `<section class="pf" aria-label="Performance profile">
 <header class="pf-h"><div><div class="pf-ey">${esc((cfg().short||'Atelier XI').toUpperCase())} · PLAYER DEVELOPMENT</div><h3 class="pf-t">Performance profile</h3></div>
-<div class="pf-meta"><div><span>Rated</span><b>${esc(dt)}</b></div><div><span>Player</span><b class="hi">${esc(p.name)}</b></div><div><span>Group</span><b>${esc(p.group||'—')}</b></div></div></header>
+<div class="pf-meta"><div><span>Player</span><b class="hi">${esc(p.name)}</b></div><div><span>Group</span><b>${esc(p.group||'—')}</b></div></div></header>
 <div class="pf-chart">${pfSVG(pfChartPrims(d),640,640,`Performance profile of ${p.name}`)}</div>
-<div class="pf-legend"><span><i class="lg-you"></i>${esc(p.name.split(' ')[0])}</span>${team?'<span><i class="lg-avg"></i>Team average zone</span>':''}${d.prev?`<span><i class="lg-prev"></i>Last rating${d.prev.date?' · '+esc(fmtDate(d.prev.date)):''}</span>`:''}<span class="pf-scale">Scale 1–10</span></div>
+<div class="pf-legend"><span><i class="lg-you"></i>${esc(p.name.split(' ')[0])}</span>${team?'<span><i class="lg-avg"></i>Team average zone</span>':''}${d.prev?`<span><i class="lg-prev"></i>Last rating</span>`:''}<span class="pf-scale">Scale 1–10</span></div>
 <div class="pf-keyrow">${d.skills.map(s=>`<span><b>${s.code}</b>${esc(s.label)}</span>`).join('')}</div>
 ${d.compare?`<div class="pf-sec"><h4>Rank in ${esc(p.group||'the group')}</h4><span></span><em class="pf-staff">Staff only</em></div>
 <div class="pf-ranks">${d.areas.map(a=>`<div class="pf-rank"><div class="pf-rl">${esc(a.name)}</div><div class="pf-rn">${team?`${a.rank}<small>${pfOrd(a.rank)}</small>`:'—'}</div><div class="pf-rs">${team?`of ${a.n} rated players`:`Only rated player in ${esc(p.group||'the group')}`}</div><div class="pf-rv">Score <b>${pfFmt(a.score)}</b> / 10 ${pfChg(a.score,a.prev)}</div></div>`).join('')}</div>`
@@ -4210,7 +4210,7 @@ const head=(g,title,pg)=>{
 if(logo)g.drawImage(logo,M,66,74,74*logo.height/logo.width);
 const lx=logo?M+96:M;T(g,`${(c.short||'Atelier XI').toUpperCase()} · PLAYER DEVELOPMENT`,lx,92,`500 15px ${F.m}`,C.muted,'left',3);
 T(g,title.toUpperCase(),lx,150,`600 64px ${F.d}`,C.fg,'left',2);
-const meta=[['RATED',fmtDateY(d.cur.date)],['PLAYER',p.name],['GROUP',p.group||'—']];let x=lx;
+const meta=[['PLAYER',p.name],['GROUP',p.group||'—']];let x=lx;
 meta.forEach(([k,v])=>{const font=`600 26px ${F.b}`;const val=fit(g,v,font,460);g.font=font;const w=Math.max(g.measureText(val).width,90);T(g,k,x,206,`500 14px ${F.m}`,C.muted,'left',2);T(g,val,x,242,font,k==='PLAYER'?C.accL:C.fg);x+=w+56});
 g.fillStyle=C.line;g.fillRect(M,272,R-M,2);
 T(g,`${(c.name||c.short||'Atelier XI').toUpperCase()}${c.phone?' · '+c.phone:''}`,M,Ht-60,`500 14px ${F.m}`,C.faint,'left',2);T(g,`P${pg} / 2`,R,Ht-60,`500 14px ${F.m}`,C.faint,'right',2);
@@ -4218,7 +4218,7 @@ T(g,`${(c.name||c.short||'Atelier XI').toUpperCase()}${c.phone?' · '+c.phone:''
 // page 1: chart + rank
 let g=mk();head(g,'Performance profile',1);
 pfDraw(g,pfChartPrims(d),(Wd-920)/2,296,920/640);
-let y=1262;const lg=[['you',p.name.split(' ')[0]],...(team?[['avg','Team average zone']]:[]),...(d.prev?[['prev','Last rating'+(d.prev.date?' · '+fmtDate(d.prev.date):'')]]:[])];
+let y=1262;const lg=[['you',p.name.split(' ')[0]],...(team?[['avg','Team average zone']]:[]),...(d.prev?[['prev','Last rating']]:[])];
 let lx=M;g.font=`500 18px ${F.b}`;lg.forEach(([k,l])=>{if(k==='you'){g.strokeStyle=C.accL;g.lineWidth=3;g.setLineDash([8,6]);g.beginPath();g.moveTo(lx,y-6);g.lineTo(lx+36,y-6);g.stroke();g.setLineDash([])}else if(k==='avg'){g.fillStyle='rgba(238,242,249,.12)';g.fillRect(lx,y-15,36,18);g.strokeStyle='rgba(238,242,249,.35)';g.lineWidth=1.5;for(let i=-18;i<36;i+=6){g.beginPath();g.moveTo(lx+Math.max(0,i),y-15+Math.max(0,-i));g.lineTo(lx+Math.min(36,i+18),y+3-Math.max(0,i+18-36));g.stroke()}}else{g.strokeStyle=C.faint;g.lineWidth=3;g.lineCap='round';g.setLineDash([2,7]);g.beginPath();g.moveTo(lx,y-6);g.lineTo(lx+36,y-6);g.stroke();g.setLineDash([]);g.lineCap='butt'}
 T(g,l,lx+48,y,`500 18px ${F.b}`,C.muted);g.font=`500 18px ${F.b}`;lx+=48+g.measureText(l).width+40});
 T(g,'Scale 1 – 10',R,y,`500 15px ${F.m}`,C.faint,'right',2);
@@ -4383,7 +4383,7 @@ const hero=`<section class="fam-hero">
 <div class="fam-tiles ${share?'':'two'}">
 <div class="fam-tile"><span>Next training</span>${nt?`<b>${inDays(nt.days)} · ${esc(nt.s.start)}–${esc(nt.s.end)}</b><em>${esc(fmtDay(nt.date))}${nt.s.pitch?' · '+esc(nt.s.pitch):''}</em>`:`<b>Not scheduled</b><em>No training times published yet</em>`}</div>
 <div class="fam-tile"><span>Next match</span>${nm?`<b>${nm.status==='live'?'Live now':inDays(Math.max(0,Math.round((parseD(nm.date)-parseD(today()))/864e5)))}${nm.time?' · '+esc(nm.time):''}</b><em>vs ${esc(nm.opponent||'TBC')}${comp?' · '+esc(comp.name):''}</em>`:`<b>No match planned</b><em>New fixtures show here first</em>`}</div>
-${share?`<div class="fam-tile"><span>Performance profile</span>${pd?`<b>Rated ${esc(fmtDate(pd.cur.date))}</b><em>${pd.areas.map(a=>`${esc(a.name.split(' ')[0])} ${pfFmt(a.score)}`).join(' · ')} <span class="fam-of">/ 10</span></em>`:`<b>Not rated yet</b><em>Coaches rate every few weeks</em>`}</div>`:''}
+${share?`<div class="fam-tile"><span>Performance profile</span>${pd?`<b>${pd.areas.map(a=>`${esc(a.name.split(' ')[0])} ${pfFmt(a.score)}`).join(' · ')}</b><em>Scores out of 10</em>`:`<b>Not rated yet</b><em>Coaches rate every few weeks</em>`}</div>`:''}
 </div></section>`;
 const train=panel({title:`${first}’s training`,count:slots.length?`${slots.length} a week`:null,body:slots.length?`<div class="list">${slots.map(s=>{const isNext=nt&&nt.s.id===s.id;return `<div class="li ${isNext?'fam-next':''}"><div class="fam-day">${DAY_SHORT[Number(s.day)]}</div><div class="grow"><div class="t">${esc(s.start)} – ${esc(s.end)}</div><div class="s">${esc([s.pitch,p.group].filter(Boolean).join(' · '))}</div></div>${isNext?`<span class="pill ok">${inDays(nt.days)}</span>`:''}</div>`}).join('')}</div>`:`<div class="empty" style="padding:22px"><p>The academy hasn’t published ${esc(p.group)} training times yet.</p></div>`,foot:`<button class="btn sm ghost" data-act="go" data-r="schedule">Full training schedule →</button>`});
 const games=panel({title:'Matches',count:up.length?`${up.length} coming up`:null,body:(up.length?up.slice(0,4).map(m=>fixtureRow(m)+(inSquad(m,p)?`<div class="fam-squad">${ICON.check} ${first} is in the squad</div>`:'')).join(''):`<div class="empty" style="padding:18px"><p>No ${esc(p.group)} matches planned yet.</p></div>`)+(res.length?`<div class="fam-sub">Latest results</div>`+res.map(m=>fixtureRow(m,{note:true})).join(''):''),foot:`<button class="btn sm ghost" data-act="go" data-r="matches">Match centre →</button>`});
