@@ -4845,7 +4845,9 @@ const bookLastKey=()=>'axi-book-page:'+(BOOK.v||'');
 function bookLast(){try{return Number(localStorage.getItem(bookLastKey()))||1}catch(e){return 1}}
 function bookDoc(html,p){
 const s='<scr'+'ipt>(function(){var b=window.__book;if(!b)return;var go='+(Number(p)||1)+';if(go>1)b.goPage(go);var last=0;setInterval(function(){var n=b.page();if(n!==last){last=n;parent.postMessage({axiBook:n},"*")}},800);window.addEventListener("message",function(e){if(e.source===parent&&e.data&&e.data.axiGo)b.goPage(+e.data.axiGo)});document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;var o=[].some.call(document.querySelectorAll(".overlay"),function(x){return !x.hidden});if(!o)parent.postMessage({axiClose:1},"*")})})()</scr'+'ipt>';
-const i=html.toLowerCase().lastIndexOf('</body>');return i<0?html+s:html.slice(0,i)+s+html.slice(i);
+// same fingers as the Parent Guide: tap turns the page, two fingers zoom, one finger moves when zoomed (GUIDE_TOUCH, pages-guide.js)
+const t=typeof GUIDE_TOUCH==='string'?'<scr'+'ipt>'+GUIDE_TOUCH+'</scr'+'ipt>':'';
+const i=html.toLowerCase().lastIndexOf('</body>');return i<0?html+s+t:html.slice(0,i)+s+t+html.slice(i);
 }
 function bookOverlay(){
 if(BOOK_EL)return BOOK_EL;
@@ -4899,7 +4901,7 @@ const hero=`<section class="bk-hero">
 <p class="muted">${esc([m.edition,m.pages?m.pages+' pages':'',mb(m.size||0)].filter(Boolean).join(' · '))}</p>
 <div class="bk-acts"><button class="btn primary bk-open" data-act="bookOpen"${loading?' disabled':''}>${BK_ICON} ${ready?'Open the book':loading?'Opening…':'Open the book'}</button>${ready&&bookLast()>1?`<span class="muted small">Opens on page ${bookLast()}</span>`:''}</div>
 ${status}
-<p class="muted small bk-tip">Turn pages by swiping or tapping the edges. Tap the middle of a page to zoom in. ${m.at?`Added ${esc(fmtDate(ds(new Date(m.at))))}${m.by?' by '+esc(personName(m.by)):''}.`:''}</p>
+<p class="muted small bk-tip">Tap or swipe to turn the pages. Pinch with two fingers to zoom in. ${m.at?`Added ${esc(fmtDate(ds(new Date(m.at))))}${m.by?' by '+esc(personName(m.by)):''}.`:''}</p>
 ${mg?`<div class="bk-adm"><button class="btn sm" data-act="bookUpload">Replace with a new edition</button><button class="btn sm ghost danger" data-act="bookRemove">Remove</button><span class="muted small">Only staff can open it. Parents and guests don’t see it.</span></div>`:''}
 </div></section>`;
 const ages=Object.entries(m.ages||{}).sort((a,b)=>a[1]-b[1]);
