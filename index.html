@@ -5036,6 +5036,38 @@ const denied=e&&(e.code==='permission-denied'||/permission/i.test(e.message||'')
 GUIDE={state:'error',html:null,err:denied?'You don’t have access to the Parent Guide. It’s for academy members who are signed in.':((e&&e.message)||'The guide couldn’t open. Check your connection and try again.'),v:info.v};render();
 }
 }
+/* ---------- how the guide reacts to fingers (added when the app shows it; the saved file is unchanged) ----------
+tap = turn the page (left half back, right half forward) instead of opening the zoom window,
+two fingers = pinch to zoom like a normal web page, one finger while zoomed = move around. */
+const GUIDE_TOUCH='(function(){var stage=document.getElementById("stage"),book=document.getElementById("book");if(!stage||!book||!window.__book)return;'
++'var wrap=document.createElement("div");wrap.id="axZoom";wrap.style.cssText="position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0";stage.insertBefore(wrap,book);wrap.appendChild(book);'
++'var z=1,tx=0,ty=0,pts={},mode=null,g=null,SYN=false;'
++'function clamp(){var w=stage.clientWidth,h=stage.clientHeight;if(z<=1){z=1;tx=0;ty=0;return}tx=Math.min(0,Math.max(w-z*w,tx));ty=Math.min(0,Math.max(h-z*h,ty))}'
++'function apply(an){clamp();wrap.style.transition=an?"transform .25s ease":"none";wrap.style.transform=z===1?"":"translate("+tx+"px,"+ty+"px) scale("+z+")";window.__axZoom=z}'
++'function reset(){z=1;apply(true)}'
++'function rel(e){var r=stage.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}'
++'function inStage(e){return e.target===stage||stage.contains(e.target)}'
++'function cancelBook(id){SYN=true;try{stage.dispatchEvent(new PointerEvent("pointercancel",{pointerId:id,bubbles:true}))}catch(x){}SYN=false}'
++'function block(e){e.stopImmediatePropagation();if(e.cancelable)e.preventDefault()}'
++'function two(){var k=Object.keys(pts),a=pts[k[0]],b=pts[k[1]];return{x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)||1}}'
++'window.addEventListener("pointerdown",function(e){if(SYN||!inStage(e)||e.button)return;'
++'if(e.pointerType==="mouse"){mode="book";g={x:e.clientX,y:e.clientY};return}'
++'pts[e.pointerId]=rel(e);var n=Object.keys(pts).length;'
++'if(n===2){if(mode==="book")cancelBook(+Object.keys(pts)[0]);mode="pinch";var m=two();g={z0:z,d0:m.d,qx:(m.x-tx)/z,qy:(m.y-ty)/z};block(e);return}'
++'if(n>2){block(e);return}'
++'if(z>1){mode="pan";g={x:pts[e.pointerId].x,y:pts[e.pointerId].y,tx:tx,ty:ty};block(e);return}'
++'mode="book";g={x:e.clientX,y:e.clientY}},true);'
++'window.addEventListener("pointermove",function(e){if(SYN||!(e.pointerId in pts))return;pts[e.pointerId]=rel(e);'
++'if(mode==="pinch"){if(Object.keys(pts).length<2){block(e);return}var m=two();z=Math.max(1,Math.min(4,g.z0*m.d/g.d0));tx=m.x-z*g.qx;ty=m.y-z*g.qy;apply(false);block(e);return}'
++'if(mode==="pan"){var p=pts[e.pointerId];tx=g.tx+(p.x-g.x);ty=g.ty+(p.y-g.y);apply(false);block(e)}},true);'
++'function up(e){if(SYN)return;var mine=e.pointerId in pts;if(!mine&&!(e.pointerType==="mouse"&&mode==="book"))return;delete pts[e.pointerId];var n=Object.keys(pts).length;'
++'if(mode==="pinch"||mode==="pan"){block(e);if(mode==="pinch"&&n===1){var p=pts[Object.keys(pts)[0]];mode="pan";g={x:p.x,y:p.y,tx:tx,ty:ty}}if(n===0){if(z<1.08)reset();mode=null}return}'
++'if(mode==="book"&&n===0){mode=null;if(e.type!=="pointerup")return;var moved=Math.abs(e.clientX-g.x)>8||Math.abs(e.clientY-g.y)>8,hit=document.elementFromPoint(e.clientX,e.clientY);'
++'if(!moved&&!(hit&&hit.closest&&hit.closest("[data-go]"))){var r=stage.getBoundingClientRect(),u=(e.clientX-r.left)/r.width;if(u>=.26&&u<=.74){block(e);cancelBook(e.pointerId);u<.5?__book.prev():__book.next()}}}}'
++'window.addEventListener("pointerup",up,true);window.addEventListener("pointercancel",up,true);'
++'var lab=document.getElementById("label");if(lab&&window.MutationObserver)new MutationObserver(function(){if(z>1)reset()}).observe(lab,{childList:true,characterData:true,subtree:true});'
++'window.addEventListener("resize",function(){if(z>1)reset()})})()';
+function guideDoc(html){const s='<scr'+'ipt>'+GUIDE_TOUCH+'</scr'+'ipt>';const i=html.toLowerCase().lastIndexOf('</body>');return i<0?html+s:html.slice(0,i)+s+html.slice(i)}
 function guideOverlay(){
 if(GUIDE_EL)return GUIDE_EL;
 const el=document.createElement('div');el.className='bk-ov';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Parent Guide');
@@ -5047,7 +5079,7 @@ function guideShow(){
 if(!GUIDE.html||!canGuide())return;
 const el=guideOverlay();el.querySelector('.bk-t').textContent=(D.guideInfo&&D.guideInfo.title)||'Parent Guide';
 const fw=el.querySelector('.bk-fw');let fr=fw.querySelector('iframe');
-if(!fr||fr.dataset.v!==String(GUIDE.v)){fw.innerHTML='';fr=document.createElement('iframe');fr.setAttribute('sandbox','allow-scripts');fr.setAttribute('title','Parent Guide');fr.dataset.v=String(GUIDE.v);fr.srcdoc=GUIDE.html;fw.appendChild(fr)}
+if(!fr||fr.dataset.v!==String(GUIDE.v)){fw.innerHTML='';fr=document.createElement('iframe');fr.setAttribute('sandbox','allow-scripts');fr.setAttribute('title','Parent Guide');fr.dataset.v=String(GUIDE.v);fr.srcdoc=guideDoc(GUIDE.html);fw.appendChild(fr)}
 el.classList.add('open');document.documentElement.classList.add('bk-lock');
 if(!GUIDE_PUSHED){try{history.pushState({axiGuide:1},'',location.href);GUIDE_PUSHED=true}catch(e){}}
 setTimeout(()=>{try{fr.focus()}catch(e){}},60);
@@ -5085,7 +5117,7 @@ return head+`<section class="bk-hero">
 <p class="muted">${esc([m.pages?m.pages+' pages':'',m.size?mb(m.size):''].filter(Boolean).join(' · '))}</p>
 <div class="bk-acts"><button class="btn primary bk-open" data-act="guideOpen"${loading?' disabled':''}>${BK_ICON} ${loading?'Opening…':'Open the guide'}</button></div>
 ${err?`<p class="bk-err">${esc(err)}</p>`:''}
-<p class="muted small bk-tip">Turn pages by swiping or tapping the edges. Tap the middle of a page to zoom in.</p>
+<p class="muted small bk-tip">Tap or swipe to turn the pages. Pinch with two fingers to zoom in.</p>
 ${mg?`<div class="bk-adm"><button class="btn sm" data-act="guideUpload">Replace with a new version</button><button class="btn sm ghost danger" data-act="guideRemove">Remove</button><span class="muted small">Signed-in parents, coaches and staff can open it. Guests can’t.</span></div>`:''}
 </div></section>`;
 };
