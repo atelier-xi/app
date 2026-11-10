@@ -256,8 +256,8 @@ const PAGES=[
 {id:'money',label:'Money in & out',sec:'Finance',roles:['owner','admin']},
 {id:'finance',label:'Payments',sec:'Finance',roles:['owner','admin']},
 {id:'apparel',label:'Apparel & kits',sec:'Finance',roles:['owner','admin']},
-{id:'competitions',label:'Competitions',sec:'Competition',roles:['owner','admin']},
-{id:'matches',label:'Match centre',sec:'Competition',roles:['owner','admin','parent','guest']},
+{id:'competitions',label:'Competitions',sec:'Competition',roles:['owner','admin','coach']},
+{id:'matches',label:'Match centre',sec:'Competition',roles:['owner','admin','coach','parent','guest']},
 {id:'methodology',label:'Methodology',sec:'Academy',roles:['owner','admin','coach']},
 {id:'ask',label:'Ask Atelier XI',sec:'Academy',roles:['owner','admin','coach','parent','guest']},
 {id:'announcements',label:'Announcements',sec:'Academy',roles:['owner','admin','coach','parent']},
@@ -279,7 +279,7 @@ if(S.actAsFor!==S.me.id){S.actAsFor=S.me.id;S.actAs=null;try{S.actAs=localStorag
 const act=S.roles.length>1&&S.roles.includes(S.actAs)?S.actAs:r;
 const was=S.role;if(!S.viewAs)S.role=act;
 if(!changed&&S.role!==was&&!allowed(S.route))go(homeFor(S.role),true);
-if(changed){wire();if(!allowed(S.route)||S.route===homeFor('guest')&&S.role==='parent')go(homeFor(S.role),true)}else wireKids();
+if(changed){wire();wireKids();if(!allowed(S.route)||S.route===homeFor('guest')&&S.role!=='guest')go(homeFor(S.role),true)} // signing in from the guest page opens your own homeelse wireKids();
 render();
 }
 /* someone with two roles switches between them (their own access, not a preview) */
@@ -1149,13 +1149,13 @@ const m=S.month;const inM=sum(D.compPayments.filter(x=>monthOf(x.date)===m&&x.di
 const allRec=D.competitions.map(c=>compRecord(c.id));
 const inAll=sum(D.compPayments.filter(x=>x.direction!=='out'),x=>x.amount),outAll=sum(D.compPayments.filter(x=>x.direction==='out'),x=>x.amount);
 return titleBlock({sec:'Competition · Competitions',title:'Competitions',cells:[['Running',D.competitions.filter(c=>compState(c)==='ongoing').length]]})+
-`<div class="kpis">${kpi('Played',sum(allRec,r=>r.p),'Matches with a result')}${kpi('Record',`${sum(allRec,r=>r.w)}<small>W</small> ${sum(allRec,r=>r.d)}<small>D</small> ${sum(allRec,r=>r.l)}<small>L</small>`,`Goals ${sum(allRec,r=>r.gf)}–${sum(allRec,r=>r.ga)}`)}${kpi('Money in · all competitions',money(inAll),`${money(inM)} in ${fmtMonthName(m)}`)}${kpi('Money out · all competitions',money(outAll),`${money(outM)} in ${fmtMonthName(m)} · net ${money(inAll-outAll)}`)}</div>
-<div class="toolbar">${chips('cst',[['all','All'],['ongoing','Ongoing'],['upcoming','Upcoming'],['finished','Finished']],'all','Status')}<div class="row"><button class="btn" data-act="compPdf">${ICON.pdf} PDF</button><button class="btn" data-act="go" data-r="matches">Parent view</button><button class="btn primary" data-act="editComp">${ICON.plus} New competition</button></div></div>
+`<div class="kpis">${kpi('Played',sum(allRec,r=>r.p),'Matches with a result')}${kpi('Record',`${sum(allRec,r=>r.w)}<small>W</small> ${sum(allRec,r=>r.d)}<small>D</small> ${sum(allRec,r=>r.l)}<small>L</small>`,`Goals ${sum(allRec,r=>r.gf)}–${sum(allRec,r=>r.ga)}`)}${isMgmt()?`${kpi('Money in · all competitions',money(inAll),`${money(inM)} in ${fmtMonthName(m)}`)}${kpi('Money out · all competitions',money(outAll),`${money(outM)} in ${fmtMonthName(m)} · net ${money(inAll-outAll)}`)}`:''}</div>
+<div class="toolbar">${chips('cst',[['all','All'],['ongoing','Ongoing'],['upcoming','Upcoming'],['finished','Finished']],'all','Status')}<div class="row"><button class="btn" data-act="compPdf">${ICON.pdf} PDF</button>${isMgmt()?`<button class="btn" data-act="go" data-r="matches">Parent view</button><button class="btn primary" data-act="editComp">${ICON.plus} New competition</button>`:''}</div></div>
 ${list.length?`<div class="comps">${list.map(c=>{const r=compRecord(c.id);const st=compState(c);const net=sum(D.compPayments.filter(x=>x.competitionId===c.id),x=>x.direction==='out'?-num(x.amount):num(x.amount));const nx=upcomingMatches().find(x=>x.competitionId===c.id);const ts=compTeams(c);const pl=compPlacements(c);
 return `<button class="comp" data-act="openComp" data-id="${c.id}"><div class="between"><span class="tag">${esc(c.kind||'Competition')}</span><span class="pill ${COMP_PILL[st][0]}">${COMP_PILL[st][1]}</span></div><div class="comp-nm">${compLogo(c,'md')}<div class="nm">${esc(c.name)}</div></div><div class="muted small">${esc([c.location,c.start?fmtDate(c.start)+(c.end?' – '+fmtDateY(c.end):''):''].filter(Boolean).join(' · '))}</div>
 <div class="comp-cats">${ts.length?ts.map(t=>`<span class="cat-chip">${esc(teamLabel(t))}<i>${(t.playerIds||[]).length||''}</i></span>`).join(''):'<span class="muted small">No categories yet</span>'}</div>
 <div class="rec"><span><b>${r.w}</b>Won</span><span><b>${r.d}</b>Drawn</span><span><b>${r.l}</b>Lost</span><span><b>${r.gf}:${r.ga}</b>Goals</span></div>
-<div class="between small"><span class="muted">${pl?`Result · <b style="color:var(--fg)">${esc(pl)}</b>`:nx?`Next · ${esc(fmtDate(nx.date))} · ${esc(matchLabel(nx))} vs ${esc(nx.opponent)}`:''}</span><span class="mono ${net<0?'':'muted'}">${net?money(net):''}</span></div></button>`}).join('')}</div>`:`<div class="panel">${empty('No competitions',D.competitions.length?'Nothing matches this filter.':'Add a league or tournament, then split it into age categories. Each category gets its own squad, matches and result. Parents follow fixtures in the Match centre.',D.competitions.length?'':`<button class="btn primary" data-act="editComp">${ICON.plus} New competition</button>`)}</div>`}`;
+<div class="between small"><span class="muted">${pl?`Result · <b style="color:var(--fg)">${esc(pl)}</b>`:nx?`Next · ${esc(fmtDate(nx.date))} · ${esc(matchLabel(nx))} vs ${esc(nx.opponent)}`:''}</span><span class="mono ${net<0?'':'muted'}">${net&&isMgmt()?money(net):''}</span></div></button>`}).join('')}</div>`:`<div class="panel">${empty('No competitions',D.competitions.length?'Nothing matches this filter.':'Add a league or tournament, then split it into age categories. Each category gets its own squad, matches and result. Parents follow fixtures in the Match centre.',D.competitions.length||!isMgmt()?'':`<button class="btn primary" data-act="editComp">${ICON.plus} New competition</button>`)}</div>`}`;
 };
 function teamCard(c,t){
 const r=compRecord(c.id,t.id);const sq=(t.playerIds||[]).filter(id=>byId(D.players,id));const nx=upcomingMatches().find(m=>m.competitionId===c.id&&inTeam(m,t.id));
@@ -1163,27 +1163,28 @@ const fee=num(t.fee);const paidN=fee?sq.filter(pid=>teamPaid(c.id,t.id,pid)>=fee
 return `<article class="panel cat"><div class="cat-h"><button class="cat-g" data-act="openTeam" data-c="${c.id}" data-t="${esc(t.id)}">${esc(teamLabel(t))}</button>${t.name&&t.name!==t.group?`<span class="tag">${esc(t.group)}</span>`:''}<span class="sp"></span>${t.placement?`<span class="pill solid plain">${esc(t.placement)}</span>`:''}</div>
 <div class="cat-b"><div class="rec"><span><b>${r.w}</b>Won</span><span><b>${r.d}</b>Drawn</span><span><b>${r.l}</b>Lost</span><span><b>${r.gf}:${r.ga}</b>Goals</span></div>
 <dl class="cat-kv"><div><dt>Squad</dt><dd>${sq.length?`${sq.length} player${sq.length>1?'s':''}`:'<span class="faint">No players yet</span>'}</dd></div><div><dt>Coaches</dt><dd>${co.length?esc(co.join(', ')):'<span class="faint">—</span>'}</dd></div>
-<div><dt>Next match</dt><dd>${nx?`${esc(fmtDate(nx.date))} vs ${esc(nx.opponent)}`:'<span class="faint">—</span>'}</dd></div>${fee?`<div><dt>Contributions</dt><dd>${paidN} of ${sq.length} paid · ${money(fee)} each</dd></div>`:''}</dl>
-<div class="row"><button class="btn sm primary" data-act="openTeam" data-c="${c.id}" data-t="${esc(t.id)}">Squad &amp; matches</button><button class="btn sm" data-act="editMatch" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Match</button></div></div></article>`;
+<div><dt>Next match</dt><dd>${nx?`${esc(fmtDate(nx.date))} vs ${esc(nx.opponent)}`:'<span class="faint">—</span>'}</dd></div>${fee&&isMgmt()?`<div><dt>Contributions</dt><dd>${paidN} of ${sq.length} paid · ${money(fee)} each</dd></div>`:''}</dl>
+<div class="row"><button class="btn sm primary" data-act="openTeam" data-c="${c.id}" data-t="${esc(t.id)}">Squad &amp; matches</button>${isMgmt()?`<button class="btn sm" data-act="editMatch" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Match</button>`:''}</div></div></article>`;
 }
 function compDetail(c){
 const ts=compTeams(c);const all=D.matches.filter(m=>m.competitionId===c.id);
-const t=tabs('cdTab',[['cats','Categories',ts.length],['fixtures','Fixtures & results',all.length],['payments','Payments'],['info','Details']],'cats');
+const mgc=isMgmt(); // coaches see the competition, not its money or edit buttons
+const t=tabs('cdTab',[['cats','Categories',ts.length],['fixtures','Fixtures & results',all.length],...(mgc?[['payments','Payments']]:[]),['info','Details']],'cats');if(!mgc&&t.cur==='payments')t.cur='cats';
 const cf=ts.some(x=>x.id===S.ui.cf)?S.ui.cf:'';const cft=ts.find(x=>x.id===cf);
 const catChips=ts.length>1?pickSel('cf',[['','All categories'],...ts.map(x=>[x.id,teamLabel(x)])],'','Category'):'';
 const r=compRecord(c.id);let body='';
 if(t.cur==='cats'){
 const loose=all.filter(m=>!matchTeam(m));const selT=ts.find(x=>x.id===S.ui.cf)||ts[0];
-const picker=ts.length?`<div class="catpick-row">${pickSel('cf',ts.map(x=>{const n=(x.playerIds||[]).length;return [x.id,`${teamLabel(x)} · ${n} player${n===1?'':'s'}`]}),'','Category',selT&&selT.id)}<button class="btn sm" data-act="editTeam" data-c="${c.id}">${ICON.plus} Add category</button></div>`:'';
+const picker=ts.length?`<div class="catpick-row">${pickSel('cf',ts.map(x=>{const n=(x.playerIds||[]).length;return [x.id,`${teamLabel(x)} · ${n} player${n===1?'':'s'}`]}),'','Category',selT&&selT.id)}${mgc?`<button class="btn sm" data-act="editTeam" data-c="${c.id}">${ICON.plus} Add category</button>`:''}</div>`:'';
 body=`${picker}
 ${loose.length?`<div class="callout"><h4>${loose.length} match${loose.length>1?'es have':' has'} no category</h4><p>Open ${loose.length>1?'them':'it'} from Fixtures &amp; results and choose the category.</p></div>`:''}
-${selT?teamInline(c,selT):`<div class="panel">${empty('No categories yet','Add the age categories you’re entering, like U10 and U12. Each one gets its own squad, coaches and matches.',`<button class="btn primary" data-act="editTeam" data-c="${c.id}">${ICON.plus} Add category</button>`)}</div>`}`;
+${selT?teamInline(c,selT):`<div class="panel">${empty('No categories yet','Add the age categories you’re entering, like U10 and U12. Each one gets its own squad, coaches and matches.',mgc?`<button class="btn primary" data-act="editTeam" data-c="${c.id}">${ICON.plus} Add category</button>`:'')}</div>`}`;
 }else if(t.cur==='fixtures'){
 const ms=all.filter(m=>!cf||inTeam(m,cf)).sort(by(m=>m.date+(m.time||'')));
 const up=ms.filter(m=>m.status!=='ft'),done=ms.filter(m=>m.status==='ft').reverse();
-body=`<div class="toolbar"><div class="row" style="flex:1">${catChips||'<span class="muted small">Parents see these in the Match centre as soon as you save.</span>'}</div><button class="btn primary" data-act="editMatch" data-c="${c.id}" ${cf?`data-t="${esc(cf)}"`:''}>${ICON.plus} Add match${cft?' · '+esc(teamLabel(cft)):''}</button></div>
-${panel({title:'Fixtures',count:up.length,body:up.length?up.map(m=>fixtureRow(m,{click:true,comp:false,cat:ts.length>1&&!cf,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No upcoming fixtures${cft?' for '+esc(teamLabel(cft)):''}.</p></div>`})}
-${panel({title:'Results',count:done.length,body:done.length?done.map(m=>fixtureRow(m,{click:true,comp:false,cat:ts.length>1&&!cf,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No results yet. Open a fixture to enter the score.</p></div>`})}`;
+body=`<div class="toolbar"><div class="row" style="flex:1">${catChips||'<span class="muted small">Parents see these in the Match centre as soon as you save.</span>'}</div>${mgc?`<button class="btn primary" data-act="editMatch" data-c="${c.id}" ${cf?`data-t="${esc(cf)}"`:''}>${ICON.plus} Add match${cft?' · '+esc(teamLabel(cft)):''}</button>`:''}</div>
+${panel({title:'Fixtures',count:up.length,body:up.length?up.map(m=>fixtureRow(m,{click:mgc,comp:false,cat:ts.length>1&&!cf,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No upcoming fixtures${cft?' for '+esc(teamLabel(cft)):''}.</p></div>`})}
+${panel({title:'Results',count:done.length,body:done.length?done.map(m=>fixtureRow(m,{click:mgc,comp:false,cat:ts.length>1&&!cf,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No results yet. Open a fixture to enter the score.</p></div>`})}`;
 }else if(t.cur==='payments'){
 const px=D.compPayments.filter(x=>x.competitionId===c.id&&(!cf||x.teamId===cf)).sort(by(x=>x.date||'',-1));
 const i=sum(px.filter(x=>x.direction!=='out'),x=>x.amount),o=sum(px.filter(x=>x.direction==='out'),x=>x.amount);
@@ -1191,7 +1192,7 @@ const showCat=ts.length>1;const tl=id=>teamLabel(ts.find(x=>x.id===id));
 body=`${catChips?`<div class="toolbar">${catChips}</div>`:''}<div class="kpis k3">${kpi('Money in',money(i),'Player contributions, prize money')}${kpi('Money out',money(o),'Entry fees, transport, referees')}${kpi('Net',money(i-o),i-o<0?'Cost to the academy':'Surplus')}</div>
 ${panel({title:'Payments',count:px.length,actions:`<button class="btn sm primary" data-act="editCompPay" data-c="${c.id}" ${cf?`data-t="${esc(cf)}"`:''}>${ICON.plus} Add payment</button>`,body:px.length?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Description</th>${showCat?'<th>Category</th>':''}<th>Player</th><th>Method</th><th class="r">In</th><th class="r">Out</th><th></th></tr></thead><tbody>${px.map(x=>`<tr><td class="nowrap">${esc(fmtDate(x.date))}</td><td class="strong">${esc(x.label||'')}</td>${showCat?`<td>${x.teamId?`<span class="tag">${esc(tl(x.teamId))}</span>`:'<span class="faint">All</span>'}</td>`:''}<td>${x.playerId?esc(playerName(x.playerId)):'<span class="faint">—</span>'}</td><td class="muted small">${esc(x.method||'')}</td><td class="r">${x.direction!=='out'?money(x.amount):''}</td><td class="r">${x.direction==='out'?money(x.amount):''}</td><td class="r nowrap">${x.direction!=='out'&&x.playerId?`<button class="btn sm ghost" data-act="openInvoice" data-kind="comp" data-id="${x.id}">${x.invoiceNo?esc(x.invoiceNo):'Invoice'}</button>`:''}<button class="btn sm ghost" data-act="editCompPay" data-c="${c.id}" data-id="${x.id}" aria-label="Edit payment">${ICON.edit}</button></td></tr>`).join('')}</tbody><tfoot><tr><td colspan="${showCat?5:4}">Total</td><td class="r">${money(i)}</td><td class="r">${money(o)}</td><td></td></tr></tfoot></table></div>`:empty('No payments yet',cf?`Nothing logged for ${esc(teamLabel(cft))} yet.`:'Log entry fees, transport and player contributions for this competition.')})}`;
 }else{
-body=`<div class="kv"><div><span class="k">Type</span><span class="v">${esc(c.kind||'—')}</span></div><div><span class="k">Categories</span><span class="v">${esc(compCats(c)||'—')}</span></div><div><span class="k">Location</span><span class="v">${esc(c.location||'—')}</span></div><div><span class="k">Dates</span><span class="v">${esc(fmtDateY(c.start)||'—')}${c.end?' – '+esc(fmtDateY(c.end)):''}</span></div><div><span class="k">Status</span><span class="v">${COMP_PILL[compState(c)][1]}</span></div><div><span class="k">Results</span><span class="v">${esc(compPlacements(c)||'—')}</span></div></div>${c.notes?`<div class="callout"><h4>Notes</h4><p style="white-space:pre-wrap">${esc(c.notes)}</p></div>`:''}<div class="row"><button class="btn" data-act="editComp" data-id="${c.id}">${ICON.edit} Edit details</button><button class="btn danger" data-act="delComp" data-id="${c.id}">Delete competition</button></div>`;
+body=`<div class="kv"><div><span class="k">Type</span><span class="v">${esc(c.kind||'—')}</span></div><div><span class="k">Categories</span><span class="v">${esc(compCats(c)||'—')}</span></div><div><span class="k">Location</span><span class="v">${esc(c.location||'—')}</span></div><div><span class="k">Dates</span><span class="v">${esc(fmtDateY(c.start)||'—')}${c.end?' – '+esc(fmtDateY(c.end)):''}</span></div><div><span class="k">Status</span><span class="v">${COMP_PILL[compState(c)][1]}</span></div><div><span class="k">Results</span><span class="v">${esc(compPlacements(c)||'—')}</span></div></div>${c.notes?`<div class="callout"><h4>Notes</h4><p style="white-space:pre-wrap">${esc(c.notes)}</p></div>`:''}${mgc?`<div class="row"><button class="btn" data-act="editComp" data-id="${c.id}">${ICON.edit} Edit details</button><button class="btn danger" data-act="delComp" data-id="${c.id}">Delete competition</button></div>`:''}`;
 }
 return `<div class="between"><button class="link" data-act="ui" data-k="compId" data-v="">← All competitions</button><button class="btn sm" data-act="compPdf" data-c="${c.id}">${ICON.pdf} Download PDF</button></div>`+(c.logo?`<div class="comp-hlogo">${compLogo(c,'lg')}</div>`:'')+titleBlock({sec:`${c.kind||'Competition'}${ts.length?' · '+compCats(c):''}`,title:c.name,month:false,cells:[['Categories',ts.length],['Record',`${r.w}-${r.d}-${r.l}`],['Goals',`${r.gf}:${r.ga}`]]})+t.html+body;
 }
@@ -1199,7 +1200,7 @@ return `<div class="between"><button class="link" data-act="ui" data-k="compId" 
 function teamInline(c,t){
 const v=DRAWERS.cteam.render({id:c.id,t:t.id});if(!v)return '';const r=compRecord(c.id,t.id);const n=(t.playerIds||[]).filter(id=>byId(D.players,id)).length;
 return `<section class="cat-inline"><div class="cat-inline-h"><div><h2>${esc(teamLabel(t))}</h2><div class="s">${n} player${n===1?'':'s'} · ${r.w}W ${r.d}D ${r.l}L · Goals ${r.gf}:${r.ga}${t.placement?` · <b>${esc(t.placement)}</b>`:''}</div></div>
-<div class="row"><button class="btn sm" data-act="compPdf" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.pdf} PDF</button><button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button></div></div>${v.body}</section>`;
+<div class="row"><button class="btn sm" data-act="compPdf" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.pdf} PDF</button>${isMgmt()?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:''}</div></div>${v.body}</section>`;
 }
 /* category drawer: squad, contributions, matches, details */
 DRAWERS.cteam={render(d){
@@ -1212,14 +1213,14 @@ const lastPay=pid=>D.compPayments.filter(y=>y.competitionId===c.id&&y.playerId==
 const idsOn=sq.filter(p=>p.idDoc).length;
 const rows=sq.map(p=>{const paid=teamPaid(c.id,t.id,p.id),owes=Math.max(0,fee-paid);const lp=paid?lastPay(p.id):null;
 return `<div class="li sqr"><span class="av">${esc(initials(p.name))}</span><div class="grow"><div class="t">${esc(p.name)}</div><div class="s">${esc([p.group,p.number?'No. '+p.number:'',p.position,p.dob?'Born '+fmtDateY(p.dob):''].filter(Boolean).join(' · '))}</div></div>
-<div class="sq-acts">${fee?(owes>0?`<span class="pill bad">Owes ${money(owes)}</span>${mg?`<button class="btn sm" data-act="editCompPay" data-c="${c.id}" data-t="${esc(t.id)}" data-p="${p.id}" data-amt="${owes}">Pay</button>`:''}`:'<span class="pill ok">Paid</span>'):paid?`<span class="muted small">Paid ${money(paid)}</span>`:''}
+<div class="sq-acts">${!mg?'':fee?(owes>0?`<span class="pill bad">Owes ${money(owes)}</span>${mg?`<button class="btn sm" data-act="editCompPay" data-c="${c.id}" data-t="${esc(t.id)}" data-p="${p.id}" data-amt="${owes}">Pay</button>`:''}`:'<span class="pill ok">Paid</span>'):paid?`<span class="muted small">Paid ${money(paid)}</span>`:''}
 ${mg&&lp?`<button class="btn sm ghost" data-act="openInvoice" data-kind="comp" data-id="${lp.id}">Invoice</button>`:''}
 ${mg?(p.idDoc?`<button class="btn sm idb on" data-act="viewId" data-p="${p.id}" aria-label="View ID of ${esc(p.name)}">${ICON.idc}ID ✓</button>`:`<button class="btn sm ghost idb" data-act="addId" data-p="${p.id}" aria-label="Add ID of ${esc(p.name)}">${ICON.idc}Add ID</button>`):''}
 ${mg?`<button class="btn sm ghost" data-act="teamRemove" data-c="${c.id}" data-t="${esc(t.id)}" data-p="${p.id}" aria-label="Remove ${esc(p.name)} from the squad" title="Remove from squad">✕</button>`:''}</div></div>`}).join('');
 return {head:`<div class="eyebrow">${esc(c.kind||'Competition')} · ${esc(c.name)}</div><h2>${esc(teamLabel(t))}</h2><div class="s"><span><b>${sq.length}</b> player${sq.length===1?'':'s'}</span><span>${r.w}W ${r.d}D ${r.l}L</span><span>Goals ${r.gf}:${r.ga}</span>${t.placement?`<span class="pill solid plain">${esc(t.placement)}</span>`:''}</div>`,
-body:panel({title:'Squad',count:sq.length,actions:mg?`<button class="btn sm primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:'',body:sq.length?`<div class="list">${rows}</div>`:empty('No players yet',`Pick the kids playing in ${esc(teamLabel(t))}. You can add players from any age group.`,mg?`<button class="btn primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:''),foot:sq.length?[fee?`Contribution ${money(fee)} per player · ${money(coll)} collected of ${money(fee*sq.length)}.`:'',mg?`IDs on file: ${idsOn} of ${sq.length}.`:''].filter(Boolean).join(' '):''})+
+body:panel({title:'Squad',count:sq.length,actions:mg?`<button class="btn sm primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:'',body:sq.length?`<div class="list">${rows}</div>`:empty('No players yet',`Pick the kids playing in ${esc(teamLabel(t))}. You can add players from any age group.`,mg?`<button class="btn primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:''),foot:sq.length?[fee&&mg?`Contribution ${money(fee)} per player · ${money(coll)} collected of ${money(fee*sq.length)}.`:'',mg?`IDs on file: ${idsOn} of ${sq.length}.`:''].filter(Boolean).join(' '):''})+
 panel({title:'Matches',count:ms.length,actions:mg?`<button class="btn sm" data-act="editMatch" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Add match</button>`:'',body:ms.length?ms.map(m=>fixtureRow(m,{click:mg,comp:false,cat:false,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No matches for ${esc(teamLabel(t))} yet.</p></div>`})+
-panel({title:'Details',actions:mg?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:'',tight:false,body:`<div class="kv"><div><span class="k">Age category</span><span class="v">${esc(t.group||'—')}</span></div><div><span class="k">Coaches</span><span class="v">${esc((t.coachIds||[]).map(coachName).join(', ')||'—')}</span></div><div><span class="k">Contribution per player</span><span class="v">${fee?money(fee):'—'}</span></div><div><span class="k">Final result</span><span class="v">${esc(t.placement||'—')}</span></div></div>${t.notes?`<p style="margin:12px 0 0;white-space:pre-wrap;color:var(--fg-2)">${esc(t.notes)}</p>`:''}`})};
+panel({title:'Details',actions:mg?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:'',tight:false,body:`<div class="kv"><div><span class="k">Age category</span><span class="v">${esc(t.group||'—')}</span></div><div><span class="k">Coaches</span><span class="v">${esc((t.coachIds||[]).map(coachName).join(', ')||'—')}</span></div>${mg?`<div><span class="k">Contribution per player</span><span class="v">${fee?money(fee):'—'}</span></div>`:''}<div><span class="k">Final result</span><span class="v">${esc(t.placement||'—')}</span></div></div>${t.notes?`<p style="margin:12px 0 0;white-space:pre-wrap;color:var(--fg-2)">${esc(t.notes)}</p>`:''}`})};
 }};
 
 async function saveTeams(c,teams,msg){
@@ -1314,7 +1315,7 @@ delCompPay:d=>{$$('.scrim').pop()?.remove();confirmBox('Delete payment','Delete 
 
 /* ---------- MATCH CENTRE ---------- */
 PAGE_RENDER.matches=()=>{
-const g=S.ui.mg??kidGroup();
+const g=S.ui.mg??(kidGroup()||(S.role==='coach'&&myCoachGroups().length===1?myCoachGroups()[0]:''));
 const up=upcomingMatches(g);const live=up.filter(m=>m.status==='live');const next=live[0]||up[0];
 const results=D.matches.filter(m=>m.status==='ft'&&(!g||matchGroup(m)===g)).sort(by(m=>m.date+(m.time||''),-1)).slice(0,12);
 const comps=D.competitions.filter(c=>!g||compTeams(c).some(t=>t.group===g)).sort(by(c=>({ongoing:0,upcoming:1,finished:2}[compState(c)])+(c.start||'')));
@@ -1324,7 +1325,7 @@ if(next){const comp=byId(D.competitions,next.competitionId);const home=next.home
 const live=next.status==='live';const days=Math.round((parseD(next.date)-parseD(today()))/864e5);
 hero=`<section class="nextmatch">${home?us:them}<div class="mid"><span class="kick">${live?'<span class="pill live">Live</span>':days===0?'Today':days===1?'Tomorrow':`In ${days} days`}</span><div class="big">${live?(home?`${num(next.ourScore)}–${num(next.theirScore)}`:`${num(next.theirScore)}–${num(next.ourScore)}`):esc(next.time||'TBC')}</div><span class="kick">${esc(fmtDay(next.date))}${next.venue?' · '+esc(next.venue):''}</span><span class="tag">${compLogo(comp,'xs')}${esc(comp?comp.name:'')}${next.round?' · '+esc(next.round):''} · ${esc(matchLabel(next))}</span></div>${home?them:us}</section>${canMatchMsg(next)?`<div class="nm-acts"><button class="btn sm wa-btn" data-act="matchMsg" data-id="${next.id}">${ICON.wa} WhatsApp message for this match</button></div>`:''}`}
 return titleBlock({sec:'Competition · Match centre',title:'Match centre',month:false,note:'Fixtures, live scores and results for every Atelier XI team.',cells:[['Upcoming',up.length]]})+
-`${pickSel('mg',groupOpts(true),kidGroup(),'Age group')}
+`${pickSel('mg',groupOpts(true),kidGroup()||(S.role==='coach'&&myCoachGroups().length===1?myCoachGroups()[0]:''),'Age group')}
 ${hero||`<div class="panel">${empty('No upcoming matches','New fixtures appear here as soon as the academy adds them.')}</div>`}
 <div class="grid g-main"><div class="grid">
 ${panel({title:'Upcoming fixtures',count:up.length,body:up.length?up.map(m=>fixtureRow(m)).join(''):`<div class="empty" style="padding:22px"><p>No fixtures scheduled.</p></div>`})}
@@ -3639,9 +3640,10 @@ const c=d.c?byId(D.competitions,d.c):null;const t=c&&d.t?compTeams(c).find(x=>x.
 if(!c&&!D.competitions.length)return toast('Add a competition first.',true);
 const scopes=[...(t?[['team',`${teamLabel(t)} only`]]:[]),...(c?[['comp',c.name]]:[]),['all','All competitions']];
 modal({title:'Download PDF',submit:'Download PDF',body:`${fld('What to print',radios('scope',scopes,scopes[0][0]))}
-${fld('Include',`<div class="cp-checks"><label class="check"><input type="checkbox" name="squads" checked> Squads</label><label class="check"><input type="checkbox" name="matches" checked> Matches and results</label><label class="check"><input type="checkbox" name="money"> Payments</label><label class="check"><input type="checkbox" name="ids"> Player ID pictures</label></div>`)}
-<p class="muted small" style="margin:0">Player IDs are added at the end, one player per page, for everyone in the squads you print.</p>`,
+${fld('Include',`<div class="cp-checks"><label class="check"><input type="checkbox" name="squads" checked> Squads</label><label class="check"><input type="checkbox" name="matches" checked> Matches and results</label>${isMgmt()?`<label class="check"><input type="checkbox" name="money"> Payments</label><label class="check"><input type="checkbox" name="ids"> Player ID pictures</label>`:''}</div>`)}
+${isMgmt()?`<p class="muted small" style="margin:0">Player IDs are added at the end, one player per page, for everyone in the squads you print.</p>`:''}`,
 onSubmit:async f=>{
+if(!isMgmt()){f.money=false;f.ids=false}
 const blocks=f.scope==='team'?[{c,teams:[t]}]:f.scope==='comp'?[{c,teams:compTeams(c)}]:D.competitions.slice().sort(by(x=>({ongoing:0,upcoming:1,finished:2}[compState(x)])+(x.start||''))).map(x=>({c:x,teams:compTeams(x)}));
 const short=cfg().short||'Academy';
 const nm=f.scope==='team'?`${short} - ${c.name} - ${teamLabel(t)}`:f.scope==='comp'?`${short} - ${c.name}`:`${short} - All competitions`;
@@ -4420,7 +4422,7 @@ const canRate=p=>!!p&&(isMgmt()||(S.role==='coach'&&myCoachGroups().includes(p.g
 let CP_KEY=null;
 function wireCoachProgress(){
 if(S.realRole!=='coach')return;const gs=myCoachGroups(),key=gs.join('|');if(key===CP_KEY)return;CP_KEY=key;
-Subs.offPrefix('cRL:');D.ratingsLatest={};
+Subs.offPrefix('cRL:');D.ratingsLatest={...(D.kidRatings||{})}; // keep a coach's own child (also a parent)
 gs.forEach(g=>Subs.on('cRL:'+g,()=>Store.subCol('ratingsLatest',{where:[['group','==',g]]},rows=>{const m={};Object.entries(D.ratingsLatest).forEach(([k,v])=>{if(v.group!==g)m[k]=v});rows.forEach(r=>{m[r.id]=r});D.ratingsLatest=m;LOADED.add('ratingsLatest');render()},e=>dbErr('cRL',e))));
 render();
 }
@@ -4476,7 +4478,8 @@ function wireOwnKidsExtra(){
 if(S.realRole!=='coach'||!(S.roles||[]).includes('parent'))return;
 const m=D.members[S.me.id]||{};const ids=(m.childIds||[]).filter(Boolean),share=m.progress===true,key=ids.join(',')+'|'+share;if(key===KIDX_KEY)return;KIDX_KEY=key;
 Subs.offPrefix('kidX:');
-if(share)ids.forEach(id=>Subs.on('kidX:'+id,()=>Store.subDoc('ratingsLatest/'+id,d=>{if(d){D.ratingsLatest={...D.ratingsLatest,[id]:d};render()}},e=>dbErr('kidX',e))));
+D.kidRatings={};
+if(share)ids.forEach(id=>Subs.on('kidX:'+id,()=>Store.subDoc('ratingsLatest/'+id,d=>{if(d){D.kidRatings={...D.kidRatings,[id]:d};D.ratingsLatest={...D.ratingsLatest,[id]:d};render()}},e=>dbErr('kidX',e))));
 }
 function wireKids(force){
 wireOwnKidsExtra();
