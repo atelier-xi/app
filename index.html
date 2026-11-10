@@ -89,8 +89,8 @@ const fmtTime=ts=>ts?new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',min
 const ageOf=dob=>{if(!dob)return null;const b=parseD(dob),n=new Date();let a=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))a--;return a};
 const initials=n=>String(n||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 /* opponents with a known logo, found from the name typed on the match ("Athletico …", "ASC …") */
-const OPP_LOGOS=[{re:/athletico|\ba\.?s\.?c\b/i,src:IMG.oppAthletico}];
-const oppLogo=n=>{const s=String(n||''),o=s&&OPP_LOGOS.find(x=>x.re.test(s));return o?o.src:''};
+const OPP_LOGOS=[{re:/ath?letico|\ba[\s.]?s[\s.]?c\b|[اأإ]تلتيكو/i,src:IMG.oppAthletico}];
+const oppLogo=n=>{const s=String(n||'').normalize('NFD').replace(/[\u0300-\u036f\u064b-\u065f\u0670]/g,''),o=s&&OPP_LOGOS.find(x=>x.re.test(s));return o?o.src:''};
 const pct=(a,b)=>b?Math.round(a/b*100):null;
 const num=v=>{const n=parseFloat(String(v).replace(/,/g,''));return isFinite(n)?n:0};
 const csvList=s=>String(s||'').split(',').map(x=>x.trim()).filter(Boolean);
@@ -5532,7 +5532,24 @@ wire();
 if(!allowed(S.route))go(homeFor(S.role),true);
 render();
 }
+/* new versions: GitHub Pages lets phones keep the old page for up to 10 minutes after an upload.
+The app looks for a newer copy when it opens (and reloads once by itself) and each time it comes
+back on screen (reloads if no window is open, otherwise offers a Refresh button). */
+const BUILD_ID='1794314675';
+let updBusy=0,updOffered=0;
+async function checkUpdate(opening){
+if(updBusy||updOffered||!/^https?:$/.test(location.protocol)||/__BUILD/.test(BUILD_ID))return;updBusy=1;
+try{
+const r=await fetch(location.pathname,{cache:'reload'});if(!r.ok)return;
+const m=(await r.text()).match(/BUILD_ID='(\d+)'/);if(!m||m[1]===BUILD_ID)return;
+let tried='';try{tried=sessionStorage.getItem('axi-upd')||''}catch(e){}
+if(tried!==m[1]&&(opening||!document.querySelector('.scrim'))){try{sessionStorage.setItem('axi-upd',m[1])}catch(e){}location.reload();return}
+updOffered=1;toast('A new version of the app is ready.',false,{label:'Refresh',fn:()=>location.reload()});
+}catch(e){}finally{updBusy=0}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate(false)});
 function bootFirebase(){
+setTimeout(()=>checkUpdate(true),1200);
 try{const i=document.querySelector('link[rel=icon]');if(i)i.href=IMG.markN;const t=document.querySelector('.topbar img');if(t)t.src=IMG.crestW}catch(e){}
 try{const r=location.hash.slice(1);if(r&&PAGES.some(p=>p.id===r))S.route=r}catch(e){}
 if(!FIREBASE_CONFIG||typeof firebase==='undefined')return startPreview();
