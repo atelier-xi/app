@@ -5224,11 +5224,12 @@ GUIDE={state:'ready',html:text,err:null,v};GUIDE_UP=false;render();toast('Parent
 
 /* ============================================================
 ATELIER XI — match message for WhatsApp.
-For a confirmed (scheduled) match, the app writes the message for
-the team's WhatsApp group: date, kick-off, the time to be there
-(30 minutes before kick-off unless changed), venue and the squad.
-"Open WhatsApp" opens WhatsApp with the message ready, so the
-sender picks the group. Nothing is sent without them.
+For a confirmed (scheduled) match, the app makes a match-day
+picture (academy crest, teams, competition, date, kick-off, the
+time to be there and the venue) and writes the message to go with
+it. On a phone, "Share to WhatsApp" sends picture + text together;
+on a computer the picture is saved and WhatsApp opens with the text.
+The sender picks the group. Nothing is sent without them.
 ============================================================ */
 const MSG_BEFORE=30; // minutes before kick-off players should arrive
 const MSG_DAY_AR=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
@@ -5236,15 +5237,13 @@ const MSG_MON_AR=['كانون الثاني','شباط','آذار','نيسان','
 const MSG_DAY_EN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MSG_MON_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function msgTime(hm,lang){
-const [h,mi]=String(hm||'').split(':').map(Number);if(isNaN(h))return '';
+if(!hm)return '';const [h,mi]=String(hm).split(':').map(Number);if(isNaN(h))return '';
 const h12=((h+11)%12)+1,mm=String(mi||0).padStart(2,'0');
 return lang==='ar'?`${h12}:${mm} ${h<12?'ص':'م'}`:`${h12}:${mm} ${h<12?'AM':'PM'}`;
 }
 function msgDate(ds,lang){const d=parseD(ds);if(!d||isNaN(d))return ds||'';return lang==='ar'?`${MSG_DAY_AR[d.getDay()]} ${d.getDate()} ${MSG_MON_AR[d.getMonth()]}`:`${MSG_DAY_EN[d.getDay()]} ${d.getDate()} ${MSG_MON_EN[d.getMonth()]}`}
-function matchSquad(m){const t=matchTeam(m);return ((t&&t.playerIds)||[]).map(id=>byId(D.players,id)).filter(Boolean).map(p=>p.name).sort((a,b)=>a.localeCompare(b))}
-function matchMsgOne(m,{lang,meet,squad}){
+function matchMsgOne(m,{lang,meet}){
 const comp=byId(D.competitions,m.competitionId),grp=matchGroup(m)||'',us=cfg().short||'Atelier XI',ko=msgTime(m.time,lang),be=msgTime(meet,lang);
-const names=squad?matchSquad(m):[];
 const mins=hm=>{const [h,x]=String(hm||'').split(':').map(Number);return h*60+(x||0)};const before=m.time&&meet?mins(m.time)-mins(meet):0;
 if(lang==='ar')return [
 `⚽ مباراة ${grp?grp+' ':''}· ${us} ضد ${m.opponent||'—'}`,
@@ -5253,7 +5252,6 @@ comp?`🏆 ${comp.name}${m.round?' · '+m.round:''}`:'',
 `⏰ موعد المباراة: ${ko||'يُحدَّد لاحقاً'}`,
 be?`📍 الحضور: ${be}${before>0?` (قبل ${before} دقيقة)`:''}`:'',
 m.venue?`🏟️ الملعب: ${m.venue}`:'',
-names.length?`\n👥 اللاعبون:\n${names.map(n=>'• '+n).join('\n')}`:'',
 `\nالرجاء تأكيد حضور طفلكم.`
 ].filter(Boolean).join('\n');
 return [
@@ -5263,7 +5261,6 @@ comp?`🏆 ${comp.name}${m.round?' · '+m.round:''}`:'',
 `⏰ Kick-off: ${ko||'time to be confirmed'}`,
 be?`📍 Be there at: ${be}${before>0?` (${before} minutes before)`:''}`:'',
 m.venue?`🏟️ Venue: ${m.venue}`:'',
-names.length?`\n👥 Squad:\n${names.map(n=>'• '+n).join('\n')}`:'',
 `\nPlease confirm your child’s attendance.`
 ].filter(Boolean).join('\n');
 }
@@ -5275,29 +5272,130 @@ return matchMsgOne(m,o)+tail;
 const msgLangSaved=()=>{try{return localStorage.getItem('axi-msglang')||'en'}catch(e){return 'en'}};
 const canMatchMsg=m=>!!m&&m.status==='scheduled'&&isMgmtR(S.role); // owner and administration
 
-ACT.matchMsg=d=>{
+/* ---------- the match-day picture (1080 × 1350, made fresh each time) ---------- */
+const MP_W=1080,MP_H=1350;
+const MP_AR='"Noto Kufi Arabic","Noto Sans Arabic","Geeza Pro","Segoe UI",Tahoma,sans-serif';
+const mpIsAr=s=>/[\u0600-\u06FF]/.test(String(s||''));
+const MP_L={day:['MATCH DAY','يوم المباراة'],date:['DATE','التاريخ'],ko:['KICK-OFF','موعد المباراة'],be:['BE THERE AT','الحضور'],venue:['VENUE','الملعب'],vs:['VS','ضد'],tbc:['TBC','يُحدَّد لاحقاً'],conf:['PLEASE CONFIRM ATTENDANCE','الرجاء تأكيد الحضور'],before:[n=>`${n} MIN BEFORE KICK-OFF`,n=>`قبل ${n} دقيقة من المباراة`]};
+let MP_FONTS=null;
+function mpFonts(){if(!MP_FONTS)MP_FONTS=Promise.all(['700 96px "Big Shoulders Display"','600 46px "Big Shoulders Display"','600 22px "IBM Plex Mono"','500 15px "IBM Plex Mono"','600 40px "Instrument Sans"'].map(f=>document.fonts&&document.fonts.load(f).catch(()=>{}))).catch(()=>{});return MP_FONTS}
+function mpImg(src){return new Promise(res=>{if(!src)return res(null);const i=new Image();i.onload=()=>res(i);i.onerror=()=>res(null);i.src=src})}
+async function matchPicture(m,{lang,meet}){
+await mpFonts();
+const w=MP_W,h=MP_H,M=72,ar=lang==='ar',both=lang==='both',L=k=>MP_L[k][ar?1:0];
+const K=shCanvas(w,h),{g,T,fit,wrap}=K;
+const comp=byId(D.competitions,m.competitionId);
+const [logo,clogo]=await Promise.all([shLogo(),mpImg(comp&&comp.logo)]);
+// text that may be Arabic: right font, right direction, no letter spacing
+const fontOf=(s,size,wt,fam)=>mpIsAr(s)?`${wt>=600?700:500} ${Math.round(size*(fam==='d'?.74:fam==='m'?1.05:1))}px ${MP_AR}`:`${wt} ${size}px ${SHF[fam]}`;
+const width=(s,size,wt,fam='d',ls=0)=>{s=String(s);g.font=fontOf(s,size,wt,fam);if('letterSpacing' in g)g.letterSpacing=(mpIsAr(s)?0:ls)+'px';const tw=g.measureText(s).width;if('letterSpacing' in g)g.letterSpacing='0px';return tw};
+// a line of text: right font and direction for Arabic (no letter spacing), shrunk to fit, cut only as a last resort
+const X=(s,x,y,size,wt,color,align='left',fam='d',ls=0,max)=>{s=String(s);const a=mpIsAr(s);if(a)ls=0;
+if(max){const min=Math.round(size*.62);while(size>min&&width(s,size,wt,fam,ls)>max)size-=2}
+const font=fontOf(s,size,wt,fam);if('direction' in g)g.direction=a?'rtl':'ltr';if(max)s=fit(s,font,max,ls);T(s,x,y,font,color,align,ls);if('direction' in g)g.direction='ltr';return width(s,size,wt,fam,ls)};
+// a field label: English on the left, Arabic on the right (both when the message is in both languages)
+const label=(k,x,cw,y,color)=>{if(!ar)X(MP_L[k][0],x,y,20,600,color,'left','m',4);if(ar||both)X(MP_L[k][1],x+cw,y,20,600,color,'right','m')};
+const rr=(x,y,ww,hh,r)=>{g.beginPath();if(g.roundRect)g.roundRect(x,y,ww,hh,r);else g.rect(x,y,ww,hh)};
+
+// header: crest, academy name, MATCH DAY
+shHeader(K,logo,ar?'':MP_L.day[0],w,M);
+if(ar)X(MP_L.day[1],w-M,98,24,600,SH_ICE,'right','m');
+
+// age group
+const grp=matchGroup(m)||'';let y=246;
+if(grp){const tw=width(grp.toUpperCase(),24,600,'m',5)+44;g.strokeStyle=SH_ICE;g.lineWidth=2;rr(w/2-tw/2,y-30,tw,48,24);g.stroke();X(grp.toUpperCase(),w/2+2.5,y+3,24,600,SH_ICE,'center','m',5)}
+
+// the two teams (home side on the left, as on the fixtures list)
+const home=m.homeAway!=='away',us=cfg().short||'Atelier XI',opp=m.opponent||L('tbc');
+const cy=400,box=190,lx=w/2+(ar?280:-280),rx=w/2+(ar?-280:280);
+const drawUs=cx=>{if(logo){const s=Math.min(box/logo.width,box/logo.height);g.drawImage(logo,cx-logo.width*s/2,cy-logo.height*s/2,logo.width*s,logo.height*s)}};
+const drawThem=cx=>{g.fillStyle='rgba(255,255,255,.07)';g.beginPath();g.arc(cx,cy,box/2-4,0,Math.PI*2);g.fill();g.strokeStyle='rgba(238,242,249,.55)';g.lineWidth=3;g.stroke();
+if(m.opponent&&!mpIsAr(m.opponent)){X(initials(m.opponent),cx,cy+30,84,700,'#FFFFFF','center','d',2,box-50);return}
+const s=1.5;g.save();g.translate(cx,cy+4);g.scale(s,s);g.beginPath();g.moveTo(0,-34);g.lineTo(28,-24);g.lineTo(28,2);g.bezierCurveTo(28,20,14,30,0,36);g.bezierCurveTo(-14,30,-28,20,-28,2);g.lineTo(-28,-24);g.closePath();
+g.lineWidth=3.2/s;g.strokeStyle='#FFFFFF';g.stroke();g.beginPath();g.moveTo(-28,-6);g.lineTo(28,-6);g.moveTo(0,-34);g.lineTo(0,36);g.lineWidth=2/s;g.strokeStyle='rgba(238,242,249,.55)';g.stroke();g.restore()};
+const name=(s,cx)=>{const a=mpIsAr(s);const t=a?s:String(s).toUpperCase();const font=a?`700 34px ${MP_AR}`:`600 46px ${SHF.d}`;const ls=wrap(t,font,340,2);
+ls.forEach((l,i)=>X(l,cx,cy+box/2+70+i*52,46,600,'#FFFFFF','center','d',2,370))};
+(home?drawUs:drawThem)(lx);(home?drawThem:drawUs)(rx);
+name(home?us:opp,lx);name(home?opp:us,rx);
+X(L('vs'),w/2,cy+34,ar?96:100,700,SH_ICE,'center','d',4);
+
+// competition (with its logo on a white badge, so any logo shows on navy)
+if(comp){const t=comp.name+(m.round?' · '+m.round:'');const tt=mpIsAr(t)?t:t.toUpperCase();const cy2=700;
+const tw=Math.min(width(tt,22,600,'m',3),w-2*M-90),lw=clogo?64:0,gap=clogo?18:0,x0=w/2-(tw+lw+gap)/2;
+if(clogo){g.fillStyle='#FFFFFF';rr(x0,cy2-32,lw,lw,10);g.fill();const s=Math.min(52/clogo.width,52/clogo.height);g.drawImage(clogo,x0+lw/2-clogo.width*s/2,cy2-32+lw/2-clogo.height*s/2,clogo.width*s,clogo.height*s)}
+X(tt,x0+lw+gap+(mpIsAr(tt)?tw:0),cy2+8,22,600,'rgba(238,242,249,.86)',mpIsAr(tt)?'right':'left','m',3,tw)}
+g.strokeStyle=SH_LINE;g.lineWidth=2;g.beginPath();g.moveTo(M,752);g.lineTo(w-M,752);g.stroke();
+
+// date
+const iw=w-2*M,ax=ar?w-M:M,al=ar?'right':'left';
+label('date',M,iw,800,SH_ICE);
+const dv=msgDate(m.date,ar?'ar':'en');X(ar?dv:dv.toUpperCase(),ax,872,74,700,'#FFFFFF',al,'d',2,iw);
+
+// kick-off and the time to be there (the one parents need most is highlighted)
+const ko=msgTime(m.time,ar?'ar':'en')||L('tbc'),be=msgTime(meet,ar?'ar':'en')||L('tbc');
+const mins=hm=>{const [a,b]=String(hm||'').split(':').map(Number);return a*60+(b||0)};const before=m.time&&meet?mins(m.time)-mins(meet):0;
+const by=902,bh=186,cw=(iw-24)/2,kx=ar?M+cw+24:M,bx=ar?M:M+cw+24;
+g.strokeStyle=SH_LINE;g.lineWidth=2;rr(kx,by,cw,bh,6);g.stroke();
+label('ko',kx+28,cw-56,by+46,SH_ICE);
+X(ko,ar?kx+cw-28:kx+28,by+142,100,700,'#FFFFFF',al,'d',1,cw-56);
+g.fillStyle=SH_ICE;rr(bx,by,cw,bh,6);g.fill();
+label('be',bx+28,cw-56,by+46,SH_NAVY);
+X(be,ar?bx+cw-28:bx+28,by+142,100,700,SH_NAVY,al,'d',1,cw-56);
+if(before>0)X(MP_L.before[ar?1:0](before),ar?bx+cw-28:bx+28,by+bh-16,15,600,'rgba(11,23,48,.72)',al,'m',2,cw-56);
+
+// venue
+label('venue',M,iw,1140,SH_ICE);
+const vn=m.venue||L('tbc');const vf=mpIsAr(vn)?`700 32px ${MP_AR}`:`600 38px ${SHF.b}`;const vl=wrap(vn,vf,iw,2);
+vl.forEach((l,i)=>X(l,ax,1190+i*46,38,600,'#FFFFFF',al,'b',0,iw));
+
+// footer
+shFooter(K,w,h,M,ar||both?'':MP_L.conf[0]);
+if(ar)X(MP_L.conf[1],w-M,h-44,17,600,'#FFFFFF','right','m');
+if(both){X(MP_L.conf[0],w-M,h-58,16,600,'#FFFFFF','right','m',3);X(MP_L.conf[1],w-M,h-28,16,600,'#FFFFFF','right','m')}
+return K.cv;
+}
+function mpFileName(m){const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');return ['match',slug(matchGroup(m)),'vs',slug(m.opponent)||'opponent',m.date||''].filter(Boolean).join('-').replace(/-+/g,'-')+'.png'}
+function mpSave(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}
+
+ACT.matchMsg=async d=>{
 $$('.scrim').forEach(x=>x.remove()); // opened from the match form: it closes
 const m=byId(D.matches,d.id);if(!m)return;
-const meet0=m.time?hmAdd(m.time,-MSG_BEFORE):'';const hasSquad=matchSquad(m).length>0;const lang0=msgLangSaved();
-const O={lang:lang0,meet:meet0,squad:hasSquad};
-modal({title:'Match message',wide:true,submit:'Open WhatsApp',
-body:`<p class="muted small" style="margin:0">${esc([matchGroup(m),'vs '+(m.opponent||'TBC'),fmtDay(m.date),m.time?'kick-off '+msgTime(m.time,'en'):'no kick-off time yet'].filter(Boolean).join(' · '))}${m.msgSentAt?` · <span class="ok-t">Opened in WhatsApp ${esc(fmtDate(ds(new Date(m.msgSentAt))))}</span>`:''}</p>
-<div class="f2">${fld('Language',sel('lang',[['en','English'],['ar','العربية'],['both','English + العربية']],lang0))}${fld('Be there at',inp('meet',meet0,'time'),m.time?`${MSG_BEFORE} minutes before kick-off. Change it if you need.`:'Add the kick-off time to the match to fill this in.')}</div>
-${hasSquad?`<label class="check"><input type="checkbox" name="squad" checked> Add the squad list (${matchSquad(m).length} players)</label>`:''}
-${fld('Message',`<textarea name="text" id="mmText" rows="12" dir="auto" style="font-family:inherit">${esc(matchMsgText(m,O))}</textarea>`,'You can change the text before sending.')}`,
-extra:`<button type="button" class="btn" id="mmCopy">Copy message</button>`,
+const canShare=await shCanShare();
+const meet0=m.time?hmAdd(m.time,-MSG_BEFORE):'';const lang0=msgLangSaved();
+const O={lang:lang0,meet:meet0};const name=mpFileName(m);
+let blob=null,busy=0;
+const mark=()=>Promise.resolve().then(()=>Store.update('matches/'+m.id,{msgSentAt:Date.now()})).catch(()=>{});
+const copy=t=>{try{const p=navigator.clipboard&&navigator.clipboard.writeText(t);if(p&&p.catch)p.catch(()=>{});return !!p}catch(e){return false}};
+modal({title:'Match message',wide:true,submit:canShare?'Share to WhatsApp':'Save picture & open WhatsApp',
+body:`<p class="muted small" style="margin:0">${esc([matchGroup(m),'vs '+(m.opponent||'TBC'),fmtDay(m.date),m.time?'kick-off '+msgTime(m.time,'en'):'no kick-off time yet'].filter(Boolean).join(' · '))}${m.msgSentAt?` · <span class="ok-t">Sent from the app ${esc(fmtDate(ds(new Date(m.msgSentAt))))}</span>`:''}</p>
+<div class="sh-wrap mm-wrap"><div class="sh-opts">${fld('Language',sel('lang',[['en','English'],['ar','العربية'],['both','English + العربية']],lang0))}${fld('Be there at',inp('meet',meet0,'time'),m.time?`${MSG_BEFORE} minutes before kick-off. Change it if you need.`:'Add the kick-off time to the match to fill this in.')}
+<p class="muted small" style="margin:0">${canShare?'The picture and the message go to WhatsApp together. Pick the team’s group there.':'The picture is saved to your downloads and WhatsApp opens with the message written. Pick the group, then attach the picture.'}</p></div>
+<div class="sh-prev"><img id="mmImg" alt="Match-day picture"><span class="muted small" id="mmMsg">Making the picture…</span></div></div>
+${fld('Message',`<textarea name="text" id="mmText" rows="9" dir="auto" style="font-family:inherit">${esc(matchMsgText(m,O))}</textarea>`,'You can change the text before sending.')}`,
+extra:`<button type="button" class="btn" id="mmSave" disabled>Save picture</button><button type="button" class="btn" id="mmCopy">Copy message</button>`,
 onOpen:form=>{
-const ta=form.querySelector('#mmText');
-const link=()=>{};
-const regen=()=>{const f=formData(form);O.lang=f.lang;O.meet=f.meet;O.squad=hasSquad?!!f.squad:false;try{localStorage.setItem('axi-msglang',O.lang)}catch(e){}
-ta.value=matchMsgText(m,O);link()};
+const ta=form.querySelector('#mmText'),img=form.querySelector('#mmImg'),msg=form.querySelector('#mmMsg'),save=form.querySelector('#mmSave'),sub=form.querySelector('[type=submit]');
+const draw=async()=>{const n=++busy;blob=null;sub.disabled=true;save.disabled=true;msg.textContent='Making the picture…';msg.hidden=false;
+try{const cv=await matchPicture(m,O);if(n!==busy)return;img.src=cv.toDataURL('image/jpeg',0.86);const b=await new Promise(r=>cv.toBlob(r,'image/png'));if(n!==busy)return;if(!b)throw new Error('no picture');blob=b;msg.hidden=true;sub.disabled=false;save.disabled=false}
+catch(e){if(n!==busy)return;msg.textContent='The picture could not be made. You can still send the message.';sub.disabled=false}};
+const regen=()=>{const f=formData(form);O.lang=f.lang;O.meet=f.meet;try{localStorage.setItem('axi-msglang',O.lang)}catch(e){}ta.value=matchMsgText(m,O);draw()};
 form.querySelector('[name=lang]').addEventListener('change',regen);form.querySelector('[name=meet]').addEventListener('change',regen);
-const sq=form.querySelector('[name=squad]');if(sq)sq.addEventListener('change',regen);
-ta.addEventListener('input',link);link();
 form.querySelector('#mmCopy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(ta.value);toast('Message copied. Paste it in the team’s WhatsApp group.')}catch(e){ta.focus();ta.select();toast('Select all and copy the message.',true)}});
+save.addEventListener('click',()=>{if(blob){mpSave(blob,name);toast('Picture saved.')}});
+draw();
 },
-// opens WhatsApp with the message ready (choose the group there); runs inside the tap, so phones allow it
-onSubmit:f=>{const w=window.open(waChatUrl('',f.text),'_blank','noopener');if(!w)location.href=waChatUrl('',f.text);Promise.resolve().then(()=>Store.update('matches/'+m.id,{msgSentAt:Date.now()})).catch(()=>{})}});
+// runs inside the tap, so phones allow the share sheet / new tab
+onSubmit:async f=>{
+if(canShare&&blob){
+const file=new File([blob],name,{type:'image/png'});const copied=copy(f.text); // copied too, in case WhatsApp keeps only the picture
+const data=navigator.canShare&&navigator.canShare({files:[file],text:f.text})?{files:[file],text:f.text}:{files:[file]};
+try{await navigator.share(data)}catch(e){if(e&&e.name==='AbortError')return false;return 'Sharing didn’t work on this phone. Use Save picture and Copy message, then send them in WhatsApp.'}
+mark();toast(copied?'Shared. The message is also copied — paste it if WhatsApp shows only the picture.':'Shared.');return;
+}
+if(blob)mpSave(blob,name);copy(f.text);
+const w=window.open(waChatUrl('',f.text),'_blank','noopener');if(!w)location.href=waChatUrl('',f.text);
+mark();toast(blob?'Picture saved to your downloads. In WhatsApp, pick the group and attach it — the message is already written.':'WhatsApp opened with the message.');
+}});
 };
 
 /* ============================================================
