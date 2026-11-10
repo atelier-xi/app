@@ -1145,6 +1145,10 @@ player of the month, announcements, tasks, team & settings
 Older competitions saved with a single age group show as one category until it is edited. */
 function compTeams(c){if(!c)return [];if(Array.isArray(c.teams)&&c.teams.length)return c.teams;return c.group?[{id:'g_'+c.group,group:c.group,name:'',playerIds:[],coachIds:[],fee:null,placement:c.placement||'',notes:'',_legacy:true}]:[]}
 const teamLabel=t=>t?(t.name||t.group||'Team'):'';
+// a category can also take players from other age groups (e.g. Pro-League Tigers 2017 with 2018 ADV players)
+const teamAlso=t=>((t&&t.groups2)||[]).filter(g=>g&&g!==t.group);
+const teamGroupsLabel=t=>[t.group,...teamAlso(t)].join(' + ');
+const teamTakes=(t,p)=>!!t&&!!p&&(inGroup(p,t.group)||teamAlso(t).some(g=>inGroup(p,g)));
 function teamOfMatch(c,m){const ts=compTeams(c);if(!ts.length)return null;return (m.teamId&&ts.find(t=>t.id===m.teamId))||ts.find(t=>t.group===(m.group||(c&&c.group)||''))||(ts.length===1?ts[0]:null)}
 const matchTeam=m=>teamOfMatch(byId(D.competitions,m.competitionId),m);
 const matchGroup=m=>{const t=matchTeam(m);return t?t.group:(m.group||(byId(D.competitions,m.competitionId)||{}).group||'')};
@@ -1268,11 +1272,11 @@ ${mg?`<button class="btn sm ghost" data-act="teamRemove" data-c="${c.id}" data-t
 return {head:`<div class="eyebrow">${esc(c.kind||'Competition')} · ${esc(c.name)}</div><h2>${esc(teamLabel(t))}</h2><div class="s"><span><b>${sq.length}</b> player${sq.length===1?'':'s'}</span><span>${r.w}W ${r.d}D ${r.l}L</span><span>Goals ${r.gf}:${r.ga}</span>${t.placement?`<span class="pill solid plain">${esc(t.placement)}</span>`:''}</div>`,
 body:(!isStaffR(S.role)?'':panel({title:'Squad',count:sq.length,actions:mg?`<button class="btn sm primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:'',body:sq.length?`<div class="list">${rows}</div>`:empty('No players yet',`Pick the kids playing in ${esc(teamLabel(t))}. You can add players from any age group.`,mg?`<button class="btn primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:''),foot:sq.length?[fee&&mg?`Contribution ${money(fee)} per player · ${money(coll)} collected of ${money(fee*sq.length)}.`:'',mg?`IDs on file: ${idsOn} of ${sq.length}.`:''].filter(Boolean).join(' '):''}))+
 panel({title:'Matches',count:ms.length,actions:mg?`<button class="btn sm" data-act="editMatch" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Add match</button>`:'',body:ms.length?ms.map(m=>fixtureRow(m,{click:mg,comp:false,cat:false,coaches:isStaffR(S.role)})).join(''):`<div class="empty" style="padding:22px"><p>No matches for ${esc(teamLabel(t))} yet.</p></div>`})+
-panel({title:'Details',actions:mg?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:'',tight:false,body:`<div class="kv"><div><span class="k">Age category</span><span class="v">${esc(t.group||'—')}</span></div>${isStaffR(S.role)?`<div><span class="k">Coaches</span><span class="v">${esc((t.coachIds||[]).map(coachName).join(', ')||'—')}</span></div>`:''}${mg?`<div><span class="k">Contribution per player</span><span class="v">${fee?money(fee):'—'}</span></div>`:''}<div><span class="k">Final result</span><span class="v">${esc(t.placement||'—')}</span></div></div>${t.notes?`<p style="margin:12px 0 0;white-space:pre-wrap;color:var(--fg-2)">${esc(t.notes)}</p>`:''}`})};
+panel({title:'Details',actions:mg?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:'',tight:false,body:`<div class="kv"><div><span class="k">Age category</span><span class="v">${esc(t.group||'—')}</span></div>${teamAlso(t).length?`<div><span class="k">Also includes</span><span class="v">${esc(teamAlso(t).join(', '))} players</span></div>`:''}${isStaffR(S.role)?`<div><span class="k">Coaches</span><span class="v">${esc((t.coachIds||[]).map(coachName).join(', ')||'—')}</span></div>`:''}${mg?`<div><span class="k">Contribution per player</span><span class="v">${fee?money(fee):'—'}</span></div>`:''}<div><span class="k">Final result</span><span class="v">${esc(t.placement||'—')}</span></div></div>${t.notes?`<p style="margin:12px 0 0;white-space:pre-wrap;color:var(--fg-2)">${esc(t.notes)}</p>`:''}`})};
 }};
 
 async function saveTeams(c,teams,msg){
-const clean=teams.map(({_legacy,...t})=>({id:t.id,group:t.group||'',name:t.name||'',playerIds:t.playerIds||[],coachIds:t.coachIds||[],fee:t.fee==null||t.fee===''?null:num(t.fee),placement:t.placement||'',notes:t.notes||''}));
+const clean=teams.map(({_legacy,...t})=>({id:t.id,group:t.group||'',name:t.name||'',groups2:(t.groups2||[]).filter(g=>g&&g!==t.group),playerIds:t.playerIds||[],coachIds:t.coachIds||[],fee:t.fee==null||t.fee===''?null:num(t.fee),placement:t.placement||'',notes:t.notes||''}));
 await W(()=>Store.update('competitions/'+c.id,{teams:clean,group:clean[0]?clean[0].group:'',updatedAt:Date.now()}),msg);
 }
 async function saveTeam(c,t,msg){const ts=compTeams(byId(D.competitions,c.id)||c);const i=ts.findIndex(x=>x.id===t.id);await saveTeams(c,i<0?[...ts,t]:ts.map(x=>x.id===t.id?t:x),msg)}
@@ -1297,22 +1301,23 @@ delComp:d=>confirmBox('Delete competition','Delete this competition? Its matches
 editTeam:d=>{const c=byId(D.competitions,d.c);if(!c)return;const ts=compTeams(c);
 const t=d.t?ts.find(x=>x.id===d.t):{id:'',group:cfg().groups.find(g=>!ts.some(x=>x.group===g))||cfg().groups[0],name:'',playerIds:[],coachIds:[],fee:null,placement:'',notes:''};if(!t)return;
 modal({title:d.t?`Edit ${teamLabel(t)}`:'Add category',submit:d.t?'Save':'Add category',body:`<div class="f2">${fld('Age category',sel('group',cfg().groups,t.group))}${fld('Team name (optional)',inp('name',t.name||'','text','placeholder="e.g. U12 Blue"'),'Only needed for two teams in the same age.')}</div>
+${fld('Also includes players from (optional)',`<div class="cpick">${cfg().groups.map(g=>`<input type="checkbox" data-multi name="groups2" id="f_tg2_${esc(g)}" value="${esc(g)}" ${teamAlso(t).includes(g)?'checked':''}><label for="f_tg2_${esc(g)}">${esc(g)}</label>`).join('')}</div>`,'For a team that mixes ages, like 2017 with some 2018 ADV players. Their players show first when you pick the squad. The team still plays as its age category.')}
 ${fld('Coaches',D.coaches.length?`<div class="cpick">${D.coaches.map(co=>`<input type="checkbox" data-multi name="coachIds" id="f_tc_${co.id}" value="${co.id}" ${(t.coachIds||[]).includes(co.id)?'checked':''}><label for="f_tc_${co.id}">${esc(co.name)} <span class="muted small">${esc(co.title||'')}</span></label>`).join('')}</div>`:'<span class="muted small">Add coaches in Coaches first.</span>')}
 <div class="f2">${fld('Contribution per player ('+esc(fin().currency)+')',inp('fee',t.fee??'','number','min="0" step="0.01" placeholder="Optional"'),'What each kid pays. The squad list then shows who has paid.')}${fld('Final result',inp('placement',t.placement||'','text','placeholder="Champions, Semi-final…"'))}</div>
 ${fld('Notes',`<textarea name="notes" id="f_notes">${esc(t.notes||'')}</textarea>`)}`,
 extra:d.t?`<button type="button" class="btn danger" data-act="delTeam" data-c="${c.id}" data-t="${esc(t.id)}">Delete category</button>`:'',
 onSubmit:async f=>{const nm=String(f.name||'').trim();if(ts.some(x=>x.id!==t.id&&x.group===f.group&&(x.name||'')===nm))return `${nm||f.group} is already in this competition. Give the second team a name, like “${f.group} Blue”.`;
-const id=t.id||uid();await saveTeam(c,{...t,id,group:f.group,name:nm,coachIds:f.coachIds||[],fee:f.fee===''?null:num(f.fee),placement:String(f.placement||'').trim(),notes:f.notes||''},d.t?'Category saved':'Category added');
+const id=t.id||uid();await saveTeam(c,{...t,id,group:f.group,name:nm,groups2:(f.groups2||[]).filter(g=>g!==f.group),coachIds:f.coachIds||[],fee:f.fee===''?null:num(f.fee),placement:String(f.placement||'').trim(),notes:f.notes||''},d.t?'Category saved':'Category added');
 if(!d.t)setTimeout(()=>openDrawer('cteam',c.id,{t:id}),40)}});
 },
 delTeam:d=>{$$('.scrim').pop()?.remove();const c=byId(D.competitions,d.c);if(!c)return;const ts=compTeams(c);const t=ts.find(x=>x.id===d.t);if(!t)return;const n=D.matches.filter(m=>m.competitionId===c.id&&inTeam(m,t.id)).length;
 confirmBox(`Delete ${teamLabel(t)}`,`Remove ${esc(teamLabel(t))} from ${esc(c.name)}?${n?` Its ${n} match${n>1?'es stay':' stays'} in the records without a category.`:''}`,'Delete',async()=>{await saveTeams(c,ts.filter(x=>x.id!==t.id),'Category deleted');if(S.drawer&&S.drawer.type==='cteam')closeDrawer()})},
 teamPick:d=>{const c=byId(D.competitions,d.c);if(!c)return;const t=compTeams(c).find(x=>x.id===d.t);if(!t)return;const on=new Set(t.playerIds||[]);
-const pl=D.players.filter(p=>p.status!=='inactive'||on.has(p.id)).sort(by(p=>(p.group===t.group?'0':'1')+p.group+'|'+p.name));
+const pl=D.players.filter(p=>p.status!=='inactive'||on.has(p.id)).sort(by(p=>(p.group===t.group?'0':teamTakes(t,p)?'1':'2')+p.group+'|'+p.name));
 modal({title:`${teamLabel(t)} squad`,submit:'Save squad',body:`<div class="pfind"><span class="pfind-i" aria-hidden="true">${ICON.search}</span><input type="search" id="f_sqfind" autocomplete="off" placeholder="Type a name to find a player" aria-label="Find a player"></div>
 <label class="check"><input type="checkbox" id="f_sqall"> Show players from every age group</label>
-<div class="cpick sq-pick">${pl.map(p=>`<div class="sq-row" data-g="${p.group===t.group?1:0}" data-n="${esc((p.name+' '+p.group).toLowerCase())}"><input type="checkbox" data-multi name="playerIds" id="f_sq_${p.id}" value="${p.id}" ${on.has(p.id)?'checked':''}><label for="f_sq_${p.id}">${esc(p.name)} <span class="muted small">${esc(p.group)}${p.number?' · No. '+esc(p.number):''}${p.position?' · '+esc(p.position):''}</span></label></div>`).join('')||'<span class="muted small">No players yet. Add them in Players first.</span>'}</div>
-<div class="between"><span class="muted small" id="sqCount" aria-live="polite"></span><span class="row"><button type="button" class="btn sm ghost" id="sqAllGroup">Select all ${esc(t.group)}</button></span></div>`,
+<div class="cpick sq-pick">${pl.map(p=>`<div class="sq-row" data-g="${teamTakes(t,p)?1:0}" data-n="${esc((p.name+' '+p.group).toLowerCase())}"><input type="checkbox" data-multi name="playerIds" id="f_sq_${p.id}" value="${p.id}" ${on.has(p.id)?'checked':''}><label for="f_sq_${p.id}">${esc(p.name)} <span class="muted small">${esc(p.group)}${p.number?' · No. '+esc(p.number):''}${p.position?' · '+esc(p.position):''}</span></label></div>`).join('')||'<span class="muted small">No players yet. Add them in Players first.</span>'}</div>
+<div class="between"><span class="muted small" id="sqCount" aria-live="polite"></span><span class="row"><button type="button" class="btn sm ghost" id="sqAllGroup">Select all ${esc(teamGroupsLabel(t))}</button></span></div>`,
 onOpen:form=>{const rows=[...form.querySelectorAll('.sq-row')],q=form.querySelector('#f_sqfind'),all=form.querySelector('#f_sqall'),cnt=form.querySelector('#sqCount'),selG=form.querySelector('#sqAllGroup');
 const count=()=>{cnt.textContent=`${form.querySelectorAll('.sq-row input:checked').length} selected`};
 const apply=()=>{const s=q.value.trim().toLowerCase();let vis=0;rows.forEach(r=>{const ck=r.querySelector('input').checked;const show=s?r.dataset.n.includes(s):(all.checked||r.dataset.g==='1'||ck);r.hidden=!show;if(show)vis++});if(!vis&&!s&&!all.checked){all.checked=true;apply()}count()};
@@ -4604,7 +4609,8 @@ for(let i=0;i<8;i++){const dt=addDays(today(),i);const list=slots.filter(s=>Numb
 return null;
 }
 const inDays=n=>n===0?'Today':n===1?'Tomorrow':`In ${n} days`;
-function kidMatches(p){const gs=pGroups(p);const up=upcomingMatches().filter(m=>gs.includes(matchGroup(m)));const res=D.matches.filter(m=>m.status==='ft'&&gs.includes(matchGroup(m))).sort(by(m=>m.date+(m.time||''),-1)).slice(0,3);return {up,res}}
+// the child's matches: their age group(s), plus any team they were picked for (e.g. a 2018 ADV player in the 2017 squad)
+function kidMatches(p){const gs=pGroups(p);const mine=m=>gs.includes(matchGroup(m))||((matchTeam(m)||{}).playerIds||[]).includes(p.id);const up=upcomingMatches().filter(mine);const res=D.matches.filter(m=>m.status==='ft'&&mine(m)).sort(by(m=>m.date+(m.time||''),-1)).slice(0,3);return {up,res}}
 const inSquad=(m,p)=>{const t=matchTeam(m);return !!(t&&(t.playerIds||[]).includes(p.id))};
 
 PAGE_RENDER.family=()=>{
@@ -5741,7 +5747,7 @@ render();
 /* new versions: GitHub Pages lets phones keep the old page for up to 10 minutes after an upload.
 The app looks for a newer copy when it opens (and reloads once by itself) and each time it comes
 back on screen (reloads if no window is open, otherwise offers a Refresh button). */
-const BUILD_ID='1794337988';
+const BUILD_ID='1794342999';
 let updBusy=0,updOffered=0;
 async function checkUpdate(opening){
 if(updBusy||updOffered||!/^https?:$/.test(location.protocol)||/__BUILD/.test(BUILD_ID))return;updBusy=1;
