@@ -47,11 +47,11 @@ const SKILLS=[['technique','Receiving'],['passing','Passing'],['shooting','Shoot
 const METHODS=['Cash','Bank transfer','Card','OMT','Whish'];
 const APPAREL_CATS=['Match kit','Training kit','Tracksuit','Jacket','Socks','Bag','Other'];
 const COMP_KINDS=['League','Tournament','Cup','Friendly'];
-const ROLE_LABEL={owner:'Owner',admin:'Administration',coach:'Coach',parent:'Parent',guest:'Guest'};
+const ROLE_LABEL={owner:'Owner',admin:'Administration',coach:'Coach',parent:'Parent',social:'Social media',guest:'Guest'};
 /* one person can have several roles (e.g. Administration + Coach). members/{uid}.role is the main one
 (the highest: administration, then coach, then parent) and decides what the database allows;
 members/{uid}.roles lists them all, and the person switches between them in the menu. */
-const ROLE_ORDER=['admin','coach','parent'];
+const ROLE_ORDER=['admin','coach','parent','social']; // the first ticked is the main role
 function memberRoles(m){if(!m)return [];const rs=Array.isArray(m.roles)&&m.roles.length?m.roles:[m.role];return ROLE_ORDER.filter(r=>rs.includes(r)||r===m.role)}
 const rolesLabel=m=>memberRoles(m).map(r=>ROLE_LABEL[r]).join(' + ')||ROLE_LABEL[m&&m.role]||'';
 /* prices (kit and monthly fees) only show to people who are signed in and approved */
@@ -127,6 +127,8 @@ const byId=(arr,id)=>arr.find(x=>x.id===id);
 const toMap=rows=>Object.fromEntries(rows.map(r=>[r.id,r]));
 const isStaffR=r=>['owner','admin','coach'].includes(r);
 const isMgmtR=r=>['owner','admin'].includes(r);
+// match pictures (match-day picture, WhatsApp message, full-time graphic): owner, administration and the social media account
+const canMediaR=r=>['owner','admin','social'].includes(r);
 const isMgmt=()=>isMgmtR(S.role);
 const isOwnerRole=()=>S.role==='owner';
 const myCoachId=()=>S.role!=='coach'?null:(S.viewAs||S.mode==='preview'?(S.viewCoachId||S.coachId||D.coaches[0]?.id||null):S.coachId);
@@ -249,31 +251,31 @@ const PAGES=[
 {id:'family',get label(){return myKidIds().length>1?'My children':'My child'},sec:'',roles:['parent']},
 {id:'checkin',label:'Check in',sec:'',roles:['coach']},
 // guests can reach the page (it asks them to sign in) but only members see it in the menu
-{id:'guide',label:'Parent Guide',sec:'',roles:['owner','admin','coach','parent','guest'],menu:['owner','admin','coach','parent']},
+{id:'guide',label:'Parent Guide',sec:'',roles:['owner','admin','coach','parent','social','guest'],menu:['owner','admin','coach','parent','social']},
 {id:'attendance',label:'Attendance',sec:'Daily',roles:['owner','admin','coach']},
 {id:'plans',label:'Session plans',sec:'Daily',roles:['owner','admin','coach']},
 {id:'mysessions',label:'My sessions',sec:'Daily',roles:['coach']},
-{id:'schedule',label:'Training schedule',sec:'Daily',roles:['owner','admin','coach','parent','guest']},
+{id:'schedule',label:'Training schedule',sec:'Daily',roles:['owner','admin','coach','parent','social','guest']},
 {id:'drills',label:'Drills',sec:'Daily',roles:['owner','admin','coach']},
 {id:'players',label:'Players',sec:'Squad',roles:['owner','admin']},
 {id:'progress',label:'Player progress',sec:'Squad',roles:['owner','admin','coach']},
 {id:'coaches',label:'Coaches',sec:'Squad',roles:['owner','admin']},
-{id:'potm',label:'Player of the month',sec:'Squad',roles:['owner','admin','coach','parent']},
+{id:'potm',label:'Player of the month',sec:'Squad',roles:['owner','admin','coach','parent','social']},
 {id:'money',label:'Money in & out',sec:'Finance',roles:['owner','admin']},
 {id:'finance',label:'Payments',sec:'Finance',roles:['owner','admin']},
 {id:'apparel',label:'Apparel & kits',sec:'Finance',roles:['owner','admin']},
-{id:'competitions',label:'Competitions',sec:'Competition',roles:['owner','admin','coach']},
-{id:'matches',label:'Match centre',sec:'Competition',roles:['owner','admin','coach','parent','guest']},
+{id:'competitions',label:'Competitions',sec:'Competition',roles:['owner','admin','coach','social']},
+{id:'matches',label:'Match centre',sec:'Competition',roles:['owner','admin','coach','parent','social','guest']},
 {id:'methodology',label:'Methodology',sec:'Academy',roles:['owner','admin','coach']},
 {id:'ask',label:'Ask Atelier XI',sec:'Academy',roles:['owner','admin','coach','parent','guest']},
-{id:'announcements',label:'Announcements',sec:'Academy',roles:['owner','admin','coach','parent']},
+{id:'announcements',label:'Announcements',sec:'Academy',roles:['owner','admin','coach','parent','social']},
 {id:'tasks',label:'Tasks',sec:'Academy',roles:['owner','admin','coach']},
 {id:'kits',label:'Kits & apparel',sec:'Academy',roles:['coach','parent','guest']},
 {id:'access',label:'Team & settings',sec:'Academy',roles:['owner']},
 ];
 const pagesFor=r=>PAGES.filter(p=>p.roles.includes(r));
 function allowed(route){return pagesFor(S.role).some(p=>p.id===route)}
-function homeFor(r){return {owner:'overview',admin:'overview',coach:'checkin',parent:'family'}[r]||'matches'}
+function homeFor(r){return {owner:'overview',admin:'overview',coach:'checkin',parent:'family',social:'matches'}[r]||'matches'}
 
 function resolveRole(){
 const m=S.me.id?D.members[S.me.id]:null;
@@ -302,7 +304,7 @@ render();
 }
 function resetData(){Object.keys(D).forEach(k=>{if(Array.isArray(D[k]))D[k]=[];else if(isObj(D[k]))D[k]={};else D[k]=null});LOADED.clear()}
 function setPreviewRole(r){
-const ids={owner:'u_owner',admin:'u_admin',coach:'u_c1',parent:'u_parent',guest:null};
+const ids={owner:'u_owner',admin:'u_admin',coach:'u_c1',parent:'u_parent',social:'u_social',guest:null};
 S.me.id=ids[r];S.isOwner=r==='owner';S.realRole=r;S.role=r;S.viewAs=null;
 S.coachId=r==='coach'?'c1':null;S.viewCoachId=S.coachId;
 Subs.offAll();resetData();
@@ -341,12 +343,12 @@ function stripHTML(){return (S.mode==='live'?PLATFORM.strip():'')+stripBase()}
 function stripBase(){
 if(S.mode==='preview'){
 return `<div class="strip"><b>Preview</b><span>Sample data so you can try every screen. Nothing you change here is saved.</span>
-<div class="chips" role="group" aria-label="Preview as">${['owner','admin','coach','parent','guest'].map(r=>`<button class="chip ${S.realRole===r?'on':''}" data-act="previewRole" data-r="${r}">${ROLE_LABEL[r]}</button>`).join('')}</div></div>`;
+<div class="chips" role="group" aria-label="Preview as">${['owner','admin','coach','parent','social','guest'].map(r=>`<button class="chip ${S.realRole===r?'on':''}" data-act="previewRole" data-r="${r}">${ROLE_LABEL[r]}</button>`).join('')}</div></div>`;
 }
 if(S.viewAs){
 let extra='';
 if(S.role==='coach')extra=`<label class="row small">Coach <select class="input" style="height:30px;width:auto" data-change="viewCoach">${D.coaches.map(c=>`<option value="${c.id}" ${c.id===myCoachId()?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`;
-return `<div class="strip"><b>Viewing as ${ROLE_LABEL[S.role]}</b><span>This is what ${S.role==='parent'?'signed-in parents':S.role==='guest'?'people who aren’t signed in':S.role==='coach'?'coaches':'administration'} see. Changes you make are still saved.</span>${extra}<button class="btn sm" data-act="viewAs" data-r="">Back to owner view</button></div>`;
+return `<div class="strip"><b>Viewing as ${ROLE_LABEL[S.role]}</b><span>This is what ${S.role==='parent'?'signed-in parents':S.role==='guest'?'people who aren’t signed in':S.role==='coach'?'coaches':S.role==='social'?'the social media account':'administration'} see. Changes you make are still saved.</span>${extra}<button class="btn sm" data-act="viewAs" data-r="">Back to owner view</button></div>`;
 }
 /* two roles: on the home pages, one tap switches to the other role */
 if((S.roles||[]).length>1&&S.mode!=='preview'&&S.route===homeFor(S.role)){const others=S.roles.filter(r=>r!==S.role);
@@ -511,10 +513,10 @@ setPreviewRole('owner');
 }
 
 /* ---------- platform: Claude artifact (default) ---------- */
-function viewAsSelect(){return `<label class="rail-sel">View as<select id="viewAsSel" data-change="viewAs">${['owner','admin','coach','parent','guest'].map(r=>`<option value="${r==='owner'?'':r}" ${(S.viewAs||'')===(r==='owner'?'':r)?'selected':''}>${r==='guest'?'Guest (not signed in)':ROLE_LABEL[r]}</option>`).join('')}</select></label>`}
+function viewAsSelect(){return `<label class="rail-sel">View as<select id="viewAsSel" data-change="viewAs">${['owner','admin','coach','parent','social','guest'].map(r=>`<option value="${r==='owner'?'':r}" ${(S.viewAs||'')===(r==='owner'?'':r)?'selected':''}>${r==='guest'?'Guest (not signed in)':ROLE_LABEL[r]}</option>`).join('')}</select></label>`}
 function requestModal(extra){
 extra=extra||{};const nm=extra.name||'';delete extra.name;
-modal({title:'Ask for access',body:`<p class="muted small" style="margin:0">The academy approves your request and sets your role.</p>${fld('Your name',inp('name',nm,'text','required'))}${fld('I am',radios('role',[['parent','Parent'],['coach','Coach'],['admin','Administration']],'parent'))}<div id="poRow">${fld('Parent of',inp('parentOf','','text','autocapitalize="words" placeholder="Your child’s full name"'),'Write your child’s exact full name.')}</div>${fld('Phone (optional)',inp('phone','','tel'))}`,
+modal({title:'Ask for access',body:`<p class="muted small" style="margin:0">The academy approves your request and sets your role.</p>${fld('Your name',inp('name',nm,'text','required'))}${fld('I am',radios('role',[['parent','Parent'],['coach','Coach'],['admin','Administration'],['social','Social media']],'parent'))}<div id="poRow">${fld('Parent of',inp('parentOf','','text','autocapitalize="words" placeholder="Your child’s full name"'),'Write your child’s exact full name.')}</div>${fld('Phone (optional)',inp('phone','','tel'))}`,
 onOpen:form=>{const po=form.querySelector('#poRow');const sync=()=>{po.hidden=(form.querySelector('input[name=role]:checked')||{}).value!=='parent'};form.addEventListener('change',sync);sync()},
 submit:'Send request',onSubmit:async f=>{if(!f.name)return 'Enter your name.';const role=f.role||'parent';if(role==='parent'&&!f.parentOf)return 'Write your child’s full name.';try{await Store.set('requests/'+S.me.id,{name:f.name,role,parentOf:role==='parent'?f.parentOf:'',phone:f.phone,...extra,at:Date.now()});S.requested=true;toast('Request sent');render()}catch(e){if(e&&e.code==='invalid_argument')return PLATFORM.denyMsg;throw e}}});
 }
@@ -1130,7 +1132,9 @@ const opB=ol?`<span class="fx-logo"><img src="${ol}" alt=""></span>`:`<span clas
 const played=m.status==='ft'||m.status==='live';
 const score=played?(home?`${num(m.ourScore)} – ${num(m.theirScore)}`:`${num(m.theirScore)} – ${num(m.ourScore)}`):m.status==='postponed'?'Postponed':esc(m.time||'TBC');
 const res=matchResult(m),lab=matchLabel(m);
-return `<div class="fixture ${o.click?'click':''}" ${o.click?`data-act="editMatch" data-id="${m.id}"`:''}>
+// tapping a row: staff edit the match; the social media account opens its picture (upcoming: match-day picture, result: full-time graphic)
+const act=o.click?'editMatch':S.role==='social'&&(m.status==='scheduled'||(m.status==='ft'&&m.ourScore!=null&&m.theirScore!=null))?'matchMedia':'';
+return `<div class="fixture ${act?'click':''}" ${act?`data-act="${act}" data-id="${m.id}"`:''} ${act==='matchMedia'?`title="${m.status==='ft'?'Full-time graphic':'Match-day picture'}"`:''}>
 <div class="when">${esc(fmtDay(m.date))}${o.comp!==false&&comp?`<br><span class="fx-comp">${compLogo(comp,'xs')}${esc(comp.name)}</span>`:''}${m.round?`<br>${esc(m.round)}`:''}</div>
 <div class="team home" ${home?'style="font-weight:700"':''}><span class="tn">${esc(L)}</span>${home?usB:opB}</div>
 <div class="score ${played?'':'pending'}">${score}</div>
@@ -1192,8 +1196,8 @@ ${selT?teamInline(c,selT):`<div class="panel">${empty('No categories yet','Add t
 const ms=all.filter(m=>!cf||inTeam(m,cf)).sort(by(m=>m.date+(m.time||'')));
 const up=ms.filter(m=>m.status!=='ft'),done=ms.filter(m=>m.status==='ft').reverse();
 body=`<div class="toolbar"><div class="row" style="flex:1">${catChips||'<span class="muted small">Parents see these in the Match centre as soon as you save.</span>'}</div>${mgc?`<button class="btn primary" data-act="editMatch" data-c="${c.id}" ${cf?`data-t="${esc(cf)}"`:''}>${ICON.plus} Add match${cft?' · '+esc(teamLabel(cft)):''}</button>`:''}</div>
-${panel({title:'Fixtures',count:up.length,body:up.length?up.map(m=>fixtureRow(m,{click:mgc,comp:false,cat:ts.length>1&&!cf,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No upcoming fixtures${cft?' for '+esc(teamLabel(cft)):''}.</p></div>`})}
-${panel({title:'Results',count:done.length,body:done.length?done.map(m=>fixtureRow(m,{click:mgc,comp:false,cat:ts.length>1&&!cf,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No results yet. Open a fixture to enter the score.</p></div>`})}`;
+${panel({title:'Fixtures',count:up.length,body:up.length?up.map(m=>fixtureRow(m,{click:mgc,comp:false,cat:ts.length>1&&!cf,coaches:isStaffR(S.role)})).join(''):`<div class="empty" style="padding:22px"><p>No upcoming fixtures${cft?' for '+esc(teamLabel(cft)):''}.</p></div>`})}
+${panel({title:'Results',count:done.length,body:done.length?done.map(m=>fixtureRow(m,{click:mgc,comp:false,cat:ts.length>1&&!cf,coaches:isStaffR(S.role)})).join(''):`<div class="empty" style="padding:22px"><p>No results yet. Open a fixture to enter the score.</p></div>`})}`;
 }else if(t.cur==='payments'){
 const px=D.compPayments.filter(x=>x.competitionId===c.id&&(!cf||x.teamId===cf)).sort(by(x=>x.date||'',-1));
 const i=sum(px.filter(x=>x.direction!=='out'),x=>x.amount),o=sum(px.filter(x=>x.direction==='out'),x=>x.amount);
@@ -1207,7 +1211,7 @@ return `<div class="between"><button class="link" data-act="ui" data-k="compId" 
 }
 
 function teamInline(c,t){
-const v=DRAWERS.cteam.render({id:c.id,t:t.id});if(!v)return '';const r=compRecord(c.id,t.id);const n=(t.playerIds||[]).filter(id=>byId(D.players,id)).length;
+const v=DRAWERS.cteam.render({id:c.id,t:t.id});if(!v)return '';const r=compRecord(c.id,t.id);const n=isStaffR(S.role)?(t.playerIds||[]).filter(id=>byId(D.players,id)).length:(t.playerIds||[]).length;
 return `<section class="cat-inline"><div class="cat-inline-h"><div><h2>${esc(teamLabel(t))}</h2><div class="s">${n} player${n===1?'':'s'} · ${r.w}W ${r.d}D ${r.l}L · Goals ${r.gf}:${r.ga}${t.placement?` · <b>${esc(t.placement)}</b>`:''}</div></div>
 <div class="row"><button class="btn sm" data-act="compPdf" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.pdf} PDF</button>${isMgmt()?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:''}</div></div>${v.body}</section>`;
 }
@@ -1227,9 +1231,9 @@ ${mg&&lp?`<button class="btn sm ghost" data-act="openInvoice" data-kind="comp" d
 ${mg?(p.idDoc?`<button class="btn sm idb on" data-act="viewId" data-p="${p.id}" aria-label="View ID of ${esc(p.name)}">${ICON.idc}ID ✓</button>`:`<button class="btn sm ghost idb" data-act="addId" data-p="${p.id}" aria-label="Add ID of ${esc(p.name)}">${ICON.idc}Add ID</button>`):''}
 ${mg?`<button class="btn sm ghost" data-act="teamRemove" data-c="${c.id}" data-t="${esc(t.id)}" data-p="${p.id}" aria-label="Remove ${esc(p.name)} from the squad" title="Remove from squad">✕</button>`:''}</div></div>`}).join('');
 return {head:`<div class="eyebrow">${esc(c.kind||'Competition')} · ${esc(c.name)}</div><h2>${esc(teamLabel(t))}</h2><div class="s"><span><b>${sq.length}</b> player${sq.length===1?'':'s'}</span><span>${r.w}W ${r.d}D ${r.l}L</span><span>Goals ${r.gf}:${r.ga}</span>${t.placement?`<span class="pill solid plain">${esc(t.placement)}</span>`:''}</div>`,
-body:panel({title:'Squad',count:sq.length,actions:mg?`<button class="btn sm primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:'',body:sq.length?`<div class="list">${rows}</div>`:empty('No players yet',`Pick the kids playing in ${esc(teamLabel(t))}. You can add players from any age group.`,mg?`<button class="btn primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:''),foot:sq.length?[fee&&mg?`Contribution ${money(fee)} per player · ${money(coll)} collected of ${money(fee*sq.length)}.`:'',mg?`IDs on file: ${idsOn} of ${sq.length}.`:''].filter(Boolean).join(' '):''})+
-panel({title:'Matches',count:ms.length,actions:mg?`<button class="btn sm" data-act="editMatch" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Add match</button>`:'',body:ms.length?ms.map(m=>fixtureRow(m,{click:mg,comp:false,cat:false,coaches:true})).join(''):`<div class="empty" style="padding:22px"><p>No matches for ${esc(teamLabel(t))} yet.</p></div>`})+
-panel({title:'Details',actions:mg?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:'',tight:false,body:`<div class="kv"><div><span class="k">Age category</span><span class="v">${esc(t.group||'—')}</span></div><div><span class="k">Coaches</span><span class="v">${esc((t.coachIds||[]).map(coachName).join(', ')||'—')}</span></div>${mg?`<div><span class="k">Contribution per player</span><span class="v">${fee?money(fee):'—'}</span></div>`:''}<div><span class="k">Final result</span><span class="v">${esc(t.placement||'—')}</span></div></div>${t.notes?`<p style="margin:12px 0 0;white-space:pre-wrap;color:var(--fg-2)">${esc(t.notes)}</p>`:''}`})};
+body:(!isStaffR(S.role)?'':panel({title:'Squad',count:sq.length,actions:mg?`<button class="btn sm primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:'',body:sq.length?`<div class="list">${rows}</div>`:empty('No players yet',`Pick the kids playing in ${esc(teamLabel(t))}. You can add players from any age group.`,mg?`<button class="btn primary" data-act="teamPick" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Pick players</button>`:''),foot:sq.length?[fee&&mg?`Contribution ${money(fee)} per player · ${money(coll)} collected of ${money(fee*sq.length)}.`:'',mg?`IDs on file: ${idsOn} of ${sq.length}.`:''].filter(Boolean).join(' '):''}))+
+panel({title:'Matches',count:ms.length,actions:mg?`<button class="btn sm" data-act="editMatch" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.plus} Add match</button>`:'',body:ms.length?ms.map(m=>fixtureRow(m,{click:mg,comp:false,cat:false,coaches:isStaffR(S.role)})).join(''):`<div class="empty" style="padding:22px"><p>No matches for ${esc(teamLabel(t))} yet.</p></div>`})+
+panel({title:'Details',actions:mg?`<button class="btn sm" data-act="editTeam" data-c="${c.id}" data-t="${esc(t.id)}">${ICON.edit} Edit</button>`:'',tight:false,body:`<div class="kv"><div><span class="k">Age category</span><span class="v">${esc(t.group||'—')}</span></div>${isStaffR(S.role)?`<div><span class="k">Coaches</span><span class="v">${esc((t.coachIds||[]).map(coachName).join(', ')||'—')}</span></div>`:''}${mg?`<div><span class="k">Contribution per player</span><span class="v">${fee?money(fee):'—'}</span></div>`:''}<div><span class="k">Final result</span><span class="v">${esc(t.placement||'—')}</span></div></div>${t.notes?`<p style="margin:12px 0 0;white-space:pre-wrap;color:var(--fg-2)">${esc(t.notes)}</p>`:''}`})};
 }};
 
 async function saveTeams(c,teams,msg){
@@ -1335,9 +1339,10 @@ const lastWinner=D.potm.filter(x=>x.status==='closed'&&x.winner).sort(by(x=>x.id
 let hero='';
 if(next){const comp=byId(D.competitions,next.competitionId);const home=next.homeAway!=='away';const us=`<div class="side"><img class="only-light" src="${IMG.crestN}" alt=""><img class="only-dark" src="${IMG.crestW}" alt=""><div class="nm">${esc(cfg().short)}</div></div>`;const them=`<div class="side">${oppLogo(next.opponent)?`<img src="${oppLogo(next.opponent)}" alt="">`:`<div class="crestbox">${esc(initials(next.opponent))}</div>`}<div class="nm">${esc(next.opponent)}</div></div>`;
 const live=next.status==='live';const days=Math.round((parseD(next.date)-parseD(today()))/864e5);
-hero=`<section class="nextmatch">${home?us:them}<div class="mid"><span class="kick">${live?'<span class="pill live">Live</span>':days===0?'Today':days===1?'Tomorrow':`In ${days} days`}</span><div class="big">${live?(home?`${num(next.ourScore)}–${num(next.theirScore)}`:`${num(next.theirScore)}–${num(next.ourScore)}`):esc(next.time||'TBC')}</div><span class="kick">${esc(fmtDay(next.date))}${next.venue?' · '+esc(next.venue):''}</span><span class="tag">${compLogo(comp,'xs')}${esc(comp?comp.name:'')}${next.round?' · '+esc(next.round):''} · ${esc(matchLabel(next))}</span></div>${home?them:us}</section>${canMatchMsg(next)?`<div class="nm-acts"><button class="btn sm wa-btn" data-act="matchMsg" data-id="${next.id}">${ICON.wa} WhatsApp message for this match</button></div>`:''}`}
+hero=`<section class="nextmatch">${home?us:them}<div class="mid"><span class="kick">${live?'<span class="pill live">Live</span>':days===0?'Today':days===1?'Tomorrow':`In ${days} days`}</span><div class="big">${live?(home?`${num(next.ourScore)}–${num(next.theirScore)}`:`${num(next.theirScore)}–${num(next.ourScore)}`):esc(next.time||'TBC')}</div><span class="kick">${esc(fmtDay(next.date))}${next.venue?' · '+esc(next.venue):''}</span><span class="tag">${compLogo(comp,'xs')}${esc(comp?comp.name:'')}${next.round?' · '+esc(next.round):''} · ${esc(matchLabel(next))}</span></div>${home?them:us}</section>${canMatchMsg(next)?`<div class="nm-acts"><button class="btn sm wa-btn" data-act="matchMsg" data-id="${next.id}">${S.role==='social'?`${ICON.cam} Match-day picture`:`${ICON.wa} WhatsApp message for this match`}</button></div>`:''}`}
 return titleBlock({sec:'Competition · Match centre',title:'Match centre',month:false,note:'Fixtures, live scores and results for every Atelier XI team.',cells:[['Upcoming',up.length]]})+
 `${pickSel('mg',groupOpts(true),kidGroup()||(S.role==='coach'&&myCoachGroups().length===1?myCoachGroups()[0]:''),'Age group')}
+${S.role==='social'?`<p class="muted small" style="margin:0">Tap an upcoming match for its match-day picture, or a result for its full-time graphic.</p>`:''}
 ${hero||`<div class="panel">${empty('No upcoming matches','New fixtures appear here as soon as the academy adds them.')}</div>`}
 <div class="grid g-main"><div class="grid">
 ${panel({title:'Upcoming fixtures',count:up.length,body:up.length?up.map(m=>fixtureRow(m)).join(''):`<div class="empty" style="padding:22px"><p>No fixtures scheduled.</p></div>`})}
@@ -1624,7 +1629,7 @@ document.addEventListener('submit',e=>{if(e.target&&e.target.id==='settingsForm'
 const groups=csvList(f.groups),pitches=csvList(f.pitches);if(!groups.length){toast('Add at least one age group.',true);return}
 W(async()=>{await Store.set('config/academy',{name:f.name||DEFAULT_CONFIG.name,short:f.short||DEFAULT_CONFIG.short,slogan:f.slogan,est:f.est,groups,pitches:pitches.length?pitches:DEFAULT_CONFIG.pitches,address:f.address,phone:f.phone,email:f.email,regNo:f.regNo,invoicePrefix:(f.invoicePrefix||'AXI').replace(/[^\w]/g,'').slice(0,8)||'AXI',invoiceNote:f.invoiceNote,fee1:f.fee1===''?null:num(f.fee1),fee2:f.fee2===''?null:num(f.fee2),fee3:f.fee3===''?null:num(f.fee3),feeCur:f.currency||'$',updatedAt:Date.now()});const curF={...(D.finance||{})};delete curF.id;await Store.set('config/finance',{...curF,currency:f.currency||'$',defaultFee:num(f.defaultFee),updatedAt:Date.now()})},'Settings saved').catch(()=>{})}});
 Object.assign(ACT,{
-approve:d=>{const r=D.requests.find(x=>x.id===d.id);if(!r)return;memberModal(d.id,{role:['admin','coach','parent'].includes(r.role)?r.role:'coach',label:r.name,parentOf:r.parentOf||''},r)},
+approve:d=>{const r=D.requests.find(x=>x.id===d.id);if(!r)return;memberModal(d.id,{role:['admin','coach','parent','social'].includes(r.role)?r.role:'coach',label:r.name,parentOf:r.parentOf||''},r)},
 editMember:d=>memberModal(d.id,D.members[d.id]||{},null),
 dismissReq:d=>confirmBox('Dismiss request','Dismiss this access request? They can send another one later.','Dismiss',()=>W(()=>Store.del('requests/'+d.id),'Request dismissed'),false),
 requestAccess:()=>PLATFORM.requestAccess(),
@@ -1636,7 +1641,7 @@ function memberModal(uid,m,req){
 const coachOpts=[['','—'],...D.coaches.map(c=>[c.id,c.name]),['__new',`Create a new coach profile${req&&req.name?` for ${req.name}`:''}`]];
 const kids=new Set((m.childIds&&m.childIds.length?m.childIds:kidMatch(m.parentOf||(req&&req.parentOf))));
 const kidList=D.players.slice().sort(by(p=>(kids.has(p.id)?'0':'1')+p.name));
-modal({title:req?'Approve access':'Edit access',body:`${req?`<p style="margin:0">${esc(req.name||'')} asked to join as <b>${esc(ROLE_LABEL[req.role]||req.role)}</b>${req.parentOf?` · parent of <b>${esc(req.parentOf)}</b>`:''}.</p>`:''}${fld('Name shown in the app',inp('label',m.label||(req&&req.name)||''))}${(()=>{const cur=m.role?memberRoles(m):[(req&&req.role)||'coach'];return fld('Roles',`<div class="mm-roles">${[['admin','Administration'],['coach','Coach'],['parent','Parent']].map(([v,l])=>`<label class="check"><input type="checkbox" data-multi name="roles" value="${v}" ${cur.includes(v)?'checked':''}> ${l}</label>`).join('')}</div>`,'Tick more than one if the person has two jobs, e.g. Administration and Coach. They switch between them in the menu.')})()}
+modal({title:req?'Approve access':'Edit access',body:`${req?`<p style="margin:0">${esc(req.name||'')} asked to join as <b>${esc(ROLE_LABEL[req.role]||req.role)}</b>${req.parentOf?` · parent of <b>${esc(req.parentOf)}</b>`:''}.</p>`:''}${fld('Name shown in the app',inp('label',m.label||(req&&req.name)||''))}${(()=>{const cur=m.role?memberRoles(m):[(req&&req.role)||'coach'];return fld('Roles',`<div class="mm-roles">${[['admin','Administration'],['coach','Coach'],['parent','Parent'],['social','Social media']].map(([v,l])=>`<label class="check"><input type="checkbox" data-multi name="roles" value="${v}" ${cur.includes(v)?'checked':''}> ${l}</label>`).join('')}</div>`,'Tick more than one if the person has two jobs, e.g. Administration and Coach. They switch between them in the menu.')})()}
 <div id="mmCoach">${fld('Coach profile',sel('coachId',coachOpts,m.coachId||(req&&req.role==='coach'&&!D.coaches.length?'__new':'')),'Coaches must be linked to a profile to check in and record attendance.')}</div>
 <div id="mmParent">${fld('Parent of (as they wrote it)',inp('parentOf',m.parentOf||(req&&req.parentOf)||''))}
 ${fld('Their child in the app',D.players.length?`<div class="pfind"><span class="pfind-i" aria-hidden="true">${ICON.search}</span><input type="search" id="f_kidfind" autocomplete="off" placeholder="Type a name to find the child" aria-label="Find the child"></div><div class="cpick sq-pick kid-pick">${kidList.map(p=>`<div class="sq-row" data-n="${esc(p.name.toLowerCase())}"><input type="checkbox" data-multi name="childIds" id="f_kid_${p.id}" value="${p.id}" ${kids.has(p.id)?'checked':''}><label for="f_kid_${p.id}">${esc(p.name)} <span class="muted small">${esc(p.group||'')}</span></label></div>`).join('')}</div>`:'<span class="muted small">Add players first.</span>',kids.size?'Matched from the name they wrote. Check it’s right.':'No player with that exact name. Find the child here, or ask the parent.')}
@@ -3652,10 +3657,10 @@ const c=d.c?byId(D.competitions,d.c):null;const t=c&&d.t?compTeams(c).find(x=>x.
 if(!c&&!D.competitions.length)return toast('Add a competition first.',true);
 const scopes=[...(t?[['team',`${teamLabel(t)} only`]]:[]),...(c?[['comp',c.name]]:[]),['all','All competitions']];
 modal({title:'Download PDF',submit:'Download PDF',body:`${fld('What to print',radios('scope',scopes,scopes[0][0]))}
-${fld('Include',`<div class="cp-checks"><label class="check"><input type="checkbox" name="squads" checked> Squads</label><label class="check"><input type="checkbox" name="matches" checked> Matches and results</label>${isMgmt()?`<label class="check"><input type="checkbox" name="money"> Payments</label><label class="check"><input type="checkbox" name="ids"> Player ID pictures</label>`:''}</div>`)}
+${fld('Include',`<div class="cp-checks">${isStaffR(S.role)?`<label class="check"><input type="checkbox" name="squads" checked> Squads</label>`:''}<label class="check"><input type="checkbox" name="matches" checked> Matches and results</label>${isMgmt()?`<label class="check"><input type="checkbox" name="money"> Payments</label><label class="check"><input type="checkbox" name="ids"> Player ID pictures</label>`:''}</div>`)}
 ${isMgmt()?`<p class="muted small" style="margin:0">Player IDs are added at the end, one player per page, for everyone in the squads you print.</p>`:''}`,
 onSubmit:async f=>{
-if(!isMgmt()){f.money=false;f.ids=false}
+if(!isMgmt()){f.money=false;f.ids=false}if(!isStaffR(S.role))f.squads=false;
 const blocks=f.scope==='team'?[{c,teams:[t]}]:f.scope==='comp'?[{c,teams:compTeams(c)}]:D.competitions.slice().sort(by(x=>({ongoing:0,upcoming:1,finished:2}[compState(x)])+(x.start||''))).map(x=>({c:x,teams:compTeams(x)}));
 const short=cfg().short||'Academy';
 const nm=f.scope==='team'?`${short} - ${c.name} - ${teamLabel(t)}`:f.scope==='comp'?`${short} - ${c.name}`:`${short} - All competitions`;
@@ -5029,7 +5034,7 @@ sandboxed frame, so the book's own page turning works and it can't
 reach the app or the signed-in account.
 ============================================================ */
 const GUIDE_DOC='guides/parent', GUIDE_INFO='guides/parent_info';
-const GUIDE_ROLES=['owner','admin','coach','parent'];  // keep in step with match /guides/{id} in firestore.rules
+const GUIDE_ROLES=['owner','admin','coach','parent','social'];  // keep in step with match /guides/{id} in firestore.rules
 const GUIDE_MAX=1040000;                                // one database record holds 1 MB
 let GUIDE={state:'idle',html:null,err:null,v:null};
 let GUIDE_UP=false,GUIDE_EL=null,GUIDE_PUSHED=false;
@@ -5282,7 +5287,7 @@ if(o.lang==='both')return matchMsgOne(m,{...o,lang:'en'})+'\n\n━━━━━�
 return matchMsgOne(m,o)+tail;
 }
 const msgLangSaved=()=>{try{return localStorage.getItem('axi-msglang')||'en'}catch(e){return 'en'}};
-const canMatchMsg=m=>!!m&&m.status==='scheduled'&&isMgmtR(S.role); // owner and administration
+const canMatchMsg=m=>!!m&&m.status==='scheduled'&&canMediaR(S.role); // owner, administration and social media
 
 /* ---------- the match-day picture (1080 × 1350, made fresh each time) ---------- */
 const MP_W=1080,MP_H=1350;
@@ -5379,7 +5384,7 @@ const canShare=await shCanShare();
 const meet0=m.time?hmAdd(m.time,-MSG_BEFORE):'';const lang0=msgLangSaved();
 const O={lang:lang0,meet:meet0};const name=mpFileName(m);
 let blob=null,busy=0;
-const mark=()=>Promise.resolve().then(()=>Store.update('matches/'+m.id,{msgSentAt:Date.now()})).catch(()=>{});
+const mark=()=>{if(isMgmtR(S.role))Promise.resolve().then(()=>Store.update('matches/'+m.id,{msgSentAt:Date.now()})).catch(()=>{})}; // only staff who can edit matches
 const copy=t=>{try{const p=navigator.clipboard&&navigator.clipboard.writeText(t);if(p&&p.catch)p.catch(()=>{});return !!p}catch(e){return false}};
 modal({title:'Match message',wide:true,submit:canShare?'Share to WhatsApp':'Save picture & open WhatsApp',
 body:`<p class="muted small" style="margin:0">${esc([matchGroup(m),'vs '+(m.opponent||'TBC'),fmtDay(m.date),m.time?'kick-off '+msgTime(m.time,'en'):'no kick-off time yet'].filter(Boolean).join(' · '))}${m.msgSentAt?` · <span class="ok-t">Sent from the app ${esc(fmtDate(ds(new Date(m.msgSentAt))))}</span>`:''}</p>
@@ -5426,7 +5431,7 @@ const FT_DOME={cx:540,cy:1474,a:800,b:767,bottom:1795}; // the photo: an arched 
 let FT_FONTS=null;
 function ftFonts(){if(!FT_FONTS)FT_FONTS=Promise.all(['700 20px Orbitron','800 20px Orbitron','900 60px Orbitron','900 200px "Big Shoulders Display"'].map(f=>document.fonts&&document.fonts.load(f).catch(()=>{}))).catch(()=>{});return FT_FONTS}
 const ftIsAr=s=>/[؀-ۿ]/.test(String(s||''));
-const ftCanFT=m=>!!m&&m.status==='ft'&&m.ourScore!=null&&m.theirScore!=null&&isMgmtR(S.role);
+const ftCanFT=m=>!!m&&m.status==='ft'&&m.ourScore!=null&&m.theirScore!=null&&canMediaR(S.role);
 function ftScorersFromNotes(n){const m=String(n||'').match(/(?:goal ?scorers?|scorers?|goals?)\s*[:\-–]\s*([^\n]+?)(?:\.\s|\.?$|\n)/im);return m?m[1].trim():''}
 function ftDefaults(m){
 const comp=byId(D.competitions,m.competitionId),t=matchTeam(m);
@@ -5536,6 +5541,9 @@ draw();
 onSubmit:()=>{if(!blob)return 'The picture is still being made. Try again in a second.';mpSave(blob,name);toast('Full-time graphic saved.');return false}});
 };
 
+/* the social media account taps a match: the picture that fits it */
+ACT.matchMedia=d=>{const m=byId(D.matches,d.id);if(!m)return;if(m.status==='ft')return ACT.ftPic(d);if(m.status==='scheduled')return ACT.matchMsg(d);toast('Pictures are made for upcoming matches and full-time results.')};
+
 /* ============================================================
 ATELIER XI — standalone platform: Firebase Auth + Firestore
 Paste your Firebase web config below (Project settings → Your apps).
@@ -5600,7 +5608,7 @@ if(c.includes('network-request-failed'))return 'No connection. Check your intern
 if(c.includes('operation-not-allowed'))return 'Sign-in isn’t turned on in Firebase yet (Authentication → Sign-in method → Email/Password).';
 return (e&&e.message)||'Something went wrong. Try again.';
 }
-const JOIN_ROLES=[['parent','Parent'],['coach','Coach'],['admin','Administration']];
+const JOIN_ROLES=[['parent','Parent'],['coach','Coach'],['admin','Administration'],['social','Social media']];
 function signInModal(mode){
 mode=mode||'in';
 const title={in:'Sign in',up:'Create an account',reset:'Choose a new password'}[mode];
@@ -5669,7 +5677,7 @@ render();
 /* new versions: GitHub Pages lets phones keep the old page for up to 10 minutes after an upload.
 The app looks for a newer copy when it opens (and reloads once by itself) and each time it comes
 back on screen (reloads if no window is open, otherwise offers a Refresh button). */
-const BUILD_ID='1794317892';
+const BUILD_ID='1794318411';
 let updBusy=0,updOffered=0;
 async function checkUpdate(opening){
 if(updBusy||updOffered||!/^https?:$/.test(location.protocol)||/__BUILD/.test(BUILD_ID))return;updBusy=1;
