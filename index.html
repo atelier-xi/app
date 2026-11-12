@@ -986,6 +986,11 @@ Object.assign(TR,{
 'Sharing didn’t work here. Use Save image instead.':['Le partage n’a pas fonctionné ici. Utilisez Enregistrer l’image.','لم تنجح المشاركة هنا. استخدم حفظ الصورة بدلاً من ذلك.'],'The picture could not be made on this device.':['L’image n’a pas pu être créée sur cet appareil.','تعذّر إنشاء الصورة على هذا الجهاز.'],
 'The picture is still being made. Try again in a second.':['L’image est encore en cours de création. Réessayez dans une seconde.','لا تزال الصورة قيد الإنشاء. حاول بعد لحظة.'],'Title line':['Ligne de titre','سطر العنوان'],'White':['Blanc','أبيض'],'Share…':['Partager…','مشاركة…'],'Share':['Partager','مشاركة'],
 'Your question':['Votre question','سؤالك'],
+/* ---- session plan parts ---- */
+'Fun warm-up':['Échauffement ludique','إحماء ممتع'],'Technical fun drill':['Exercice technique ludique','تمرين تقني ممتع'],'Skill practice':['Travail des gestes','تمرين المهارات'],'Session parts':['Parties de la séance','أجزاء الحصة'],
+'Warm-up':['Échauffement','الإحماء'],'Situation':['Situation','الموقف'],'Situation 1':['Situation 1','الموقف 1'],'Situation 2':['Situation 2','الموقف 2'],
+'Fun warm-up · Technical fun drill · Skill practice · Match':['Échauffement ludique · Exercice technique ludique · Travail des gestes · Match','إحماء ممتع · تمرين تقني ممتع · تمرين المهارات · مباراة'],
+'Warm-up · Technical · Situations · Match':['Échauffement · Technique · Situations · Match','الإحماء · تقني · المواقف · مباراة'],
 /* ---- performance profile ---- */
 'ATELIER XI · PLAYER DEVELOPMENT':['ATELIER XI · DÉVELOPPEMENT DU JOUEUR','ATELIER XI · تطوير اللاعب'],'TECHNICAL':['TECHNIQUE','تقني'],'PHYSICAL':['PHYSIQUE','بدني'],'TACTICAL & MENTAL':['TACTIQUE ET MENTAL','تكتيكي وذهني'],
 'Last rating':['Dernière évaluation','آخر تقييم'],'Scale 1–10':['Échelle 1–10','المقياس 1–10'],'Score by area':['Note par domaine','الدرجة حسب المجال'],'Since last rating':['Depuis la dernière évaluation','منذ آخر تقييم'],'= same':['= identique','= كما هو'],
@@ -3037,7 +3042,7 @@ T.push(bkTable('Skill ratings','Every skill rating, scored out of 10',byKey(A.ra
 const DRM=toMap(A.drills||[]);const spl=sess.filter(s=>s.plan).map(s=>{const p=s.plan||{},bl=p.blocks||{},r=p.reflection||{};const vs=SP_REFLECT.map(([k])=>num(r[k])).filter(x=>x>0);
 return [s.date,s.group||'',`${s.start||''}–${s.end||''}`,cn(p.coachId),p.intention||'',p.function||'',p.task||'',p.overload||'',...SP_BLOCKS.flatMap(([k])=>{const b=bl[k]||{};return [b.min==null?'':num(b.min),b.drillId&&DRM[b.drillId]?DRM[b.drillId].title||'':'',b.notes||'']}),
 ...SP_REFLECT.map(([k])=>num(r[k])||''),vs.length?Math.round(sum(vs)/vs.length*10)/10:'',r.comments||'']});
-T.push(bkPlain('Session plans','Every training plan: intention, the four parts, coaching notes and the reflection scores',['Date','Group','Time','Coach','Team intention','Function','Task','Overload',...SP_BLOCKS.flatMap(([,l])=>[l+' min',l+' drill',l+' coaching notes']),...SP_REFLECT.map(([,l])=>l+' (/5)'),'Reflection average','Additional comments'],[],spl));
+T.push(bkPlain('Session plans','Every training plan: intention, the four parts, coaching notes and the reflection scores',['Date','Group','Time','Coach','Team intention','Function','Task','Overload',...SP_BLOCKS.flatMap(([k,l])=>{const f=(SP_FUN.find(x=>x[0]===k)||[])[1];l=f&&f!==l?l+' / '+f:l;return [l+' min',l+' drill',l+' coaching notes']}),...SP_REFLECT.map(([,l])=>l+' (/5)'),'Reflection average','Additional comments'],[],spl));
 T.push(bkTable('Drills','Every drill in the library, with set-up and coaching points',byKey(A.drills||[],x=>x.title||''),[
 {h:'Title',f:'title'},{h:'Type',f:x=>x.kind==='photo'?'Picture':'Diagram'},{h:'Focus',f:'focus'},{h:'Age groups',f:'ages'},{h:'Minutes',f:'duration',t:'num'},{h:'Players',f:'players'},{h:'Set-up & instructions',f:'desc'},{h:'Coaching points',f:'points'},
 {h:'Pitch',f:x=>(DR_PITCH[x.pitch]||{}).l||x.pitch||'',k:['pitch','grass']},{h:'Items drawn',f:x=>(x.items||[]).length+(x.lines||[]).length,t:'num',k:['items','lines']},{h:'By',f:x=>who(x.by),k:['by','updatedBy']},{h:'Saved at',f:'at'}]));
@@ -3637,14 +3642,21 @@ onSubmit:async f=>{await writeSession(desc,{drills:f.drills||[]});toast('Session
 ATELIER XI — Session plans
 Each training session gets a plan: header (coach, group, date,
 team intention, function, task, overload), the parts (warm-up,
-technical, one or two situations, match) with time, drill and
-coaching notes, and a reflection scored out of 5.
+technical, one or two situations, match — for the 2020 and 2021
+groups: fun warm-up, technical fun drill, skill practice, match)
+with time, drill and coaching notes, and a reflection scored out of 5.
 Stored on the session itself (sessions/{id}.plan).
 ============================================================ */
 const SP_BLOCKS=[['warmup','Warm-up','Warm-up'],['tech','Technical',''],['sit1','Situation 1',''],['sit2','Situation 2',''],['match','Match','Small-sided game']];
 /* the parts this plan uses: one situation hides Situation 2 (its content is kept) */
 const spSits=p=>p&&Number(p.sits)===1?1:2;
-const spBlocks=p=>SP_BLOCKS.filter(([k])=>k!=='sit2'||spSits(p)===2).map(([k,l,f])=>[k,k==='sit1'&&spSits(p)===1?'Situation':l,f]);
+/* the youngest groups (born 2020 and 2021) train in four parts with their own names, no situations.
+The parts keep the same places in the plan, so a plan can switch between the two. */
+const SP_FUN=[['warmup','Fun warm-up','Warm-up'],['tech','Technical fun drill',''],['sit1','Skill practice',''],['match','Match','Small-sided game']];
+const spFunGroup=g=>/(^|\D)20(20|21)(\D|$)/.test(String(g||''));
+const spFmtOf=(p,g)=>p&&(p.fmt==='fun'||p.fmt==='std')?p.fmt:spFunGroup(g)?'fun':'std';
+const spBlocks=p=>p&&p.fmt==='fun'?SP_FUN:SP_BLOCKS.filter(([k])=>k!=='sit2'||spSits(p)===2).map(([k,l,f])=>[k,k==='sit1'&&spSits(p)===1?'Situation':l,f]);
+const spFocus=(k,p)=>(spBlocks(p).find(x=>x[0]===k)||SP_BLOCKS.find(x=>x[0]===k)||[])[2];
 const spLabel=(k,p)=>(spBlocks(p).find(x=>x[0]===k)||SP_BLOCKS.find(x=>x[0]===k)||[])[1]||'Drill';
 const SP_HEAD=[['intention','Team intention','Pick one below or write your own'],['function','Function','ATT or DEF'],['task','Task','Pick one below and finish the sentence'],['overload','Overload','Pick one or more below']];
 const SP_PRESETS={intention:{o:['Behind the back line','In front of …']},function:{o:['ATT','DEF']},task:{o:['Creating chances from …','Converting chances …']},overload:{o:['Execution','DHOW','DWHAT','Communication'],multi:true}};
@@ -3663,11 +3675,11 @@ const SP={open:false,sid:null,desc:null,s:null,p:null,orig:''};
 function spEmpty(s){
 const old=(s.drills||[]).filter(id=>byId(D.drills,id));const blocks={};const was=['warmup','sit1','sit2','match']; // drills attached before plans had parts
 SP_BLOCKS.forEach(([k])=>{const i=was.indexOf(k);blocks[k]={min:'',drillId:(i>=0&&old[i])||'',notes:''}});
-return {sits:2,photoId:null,photoThumb:null,coachId:(s.coachIds||[])[0]||myCoachId()||'',intention:'',function:'',task:'',overload:'',blocks,reflection:{org:0,time:0,behaviour:0,interventions:0,comments:''}};
+return {fmt:spFmtOf(null,s.group),sits:2,photoId:null,photoThumb:null,coachId:(s.coachIds||[])[0]||myCoachId()||'',intention:'',function:'',task:'',overload:'',blocks,reflection:{org:0,time:0,behaviour:0,interventions:0,comments:''}};
 }
 function spFrom(s){
 const e=spEmpty(s),p=s.plan;if(!p)return e;
-return {...e,...clone(p),blocks:Object.fromEntries(SP_BLOCKS.map(([k])=>[k,{...e.blocks[k],...((p.blocks||{})[k]||{})}])),reflection:{...e.reflection,...(p.reflection||{})}};
+return {...e,...clone(p),fmt:spFmtOf(p,s.group),blocks:Object.fromEntries(SP_BLOCKS.map(([k])=>[k,{...e.blocks[k],...((p.blocks||{})[k]||{})}])),reflection:{...e.reflection,...(p.reflection||{})}};
 }
 const spTotal=p=>sum(spBlocks(p),([k])=>num(((p.blocks||{})[k]||{}).min));
 const spAvg=r=>{const v=SP_REFLECT.map(([k])=>num(r&&r[k])).filter(x=>x>0);return v.length?Math.round(sum(v)/v.length*10)/10:null};
@@ -3693,13 +3705,14 @@ host.innerHTML=`<div class="dr-top sp-top"><button class="ib" data-act="spClose"
 <div class="field"><span class="flabel">Age group</span><div class="sp-ro">${esc(s.group||'—')}</div></div>
 <div class="field"><span class="flabel">Date</span><div class="sp-ro">${esc(fmtDateY(s.date))}${s.start?` · ${esc(s.start)}`:''}</div></div>
 </div><div class="sp-grid sp-g2">${SP_HEAD.map(([k,l,ph])=>`<div class="field ${k==='intention'?'sp-wide':''}"><label for="spH_${k}">${l}</label>${k==='intention'?`<textarea id="spH_${k}" rows="2" placeholder="${esc(ph)}">${esc(p[k]||'')}</textarea>`:`<input class="input" id="spH_${k}" value="${esc(p[k]||'')}" placeholder="${esc(ph)}">`}${spPresetChips(k,p[k])}</div>`).join('')}</div>${spPhotoCard(p)}</section>
-${spBlocks(p).map((x,i)=>(x[0]==='sit1'?spSitsPick(p):'')+block(x,i)).join('')}
+${spFmtPick(p)}${spBlocks(p).map((x,i)=>(x[0]==='sit1'&&p.fmt!=='fun'?spSitsPick(p):'')+block(x,i)).join('')}
 <section class="sp-card sp-reflect"><header class="sp-bh"><span class="sp-bn">${String(spBlocks(p).length+1).padStart(2,'0')}</span><h3>Reflection on training</h3><span class="sp"></span>${avg!=null?`<span class="sp-avg"><b>${avg}</b>/5</span>`:'<span class="muted small">Score each out of 5 after the session</span>'}</header>
 <div class="sp-rates">${SP_REFLECT.map(([k,l])=>{const v=num(p.reflection[k]);return `<div class="sp-rate"><span class="sp-rl">${l}</span><div class="sp-stars" role="group" aria-label="${esc(l)}">${[1,2,3,4,5].map(n=>`<button class="${n<=v?'on':''}" data-act="spRate" data-k="${k}" data-v="${n}" aria-pressed="${n===v}" aria-label="${n} out of 5">${n}</button>`).join('')}</div><span class="sp-rv">${v?v+'/5':'—'}</span></div>`}).join('')}</div>
 <div class="field"><label for="spComments">Additional comments</label><textarea id="spComments" rows="4" placeholder="What worked, what to change next time, players to follow up…">${esc(p.reflection.comments||'')}</textarea></div></section>
 </div></div>`;
 host.scrollTop=st;spBind();
 }
+function spFmtPick(p){const f=p.fmt==='fun'?'fun':'std';return `<div class="sp-sits" role="group" aria-label="Session parts"><span class="flabel">Session parts</span>${[['fun','Fun warm-up · Technical fun drill · Skill practice · Match'],['std','Warm-up · Technical · Situations · Match']].map(([v,l])=>`<button type="button" class="chip ${f===v?'on':''}" data-act="spFmt" data-v="${v}" aria-pressed="${f===v}">${l}</button>`).join('')}</div>`}
 function spSitsPick(p){const n=spSits(p);return `<div class="sp-sits" role="group" aria-label="How many situations"><span class="flabel">Situations</span>${[[1,'One situation'],[2,'Two situations']].map(([v,l])=>`<button type="button" class="chip ${n===v?'on':''}" data-act="spSits" data-v="${v}" aria-pressed="${n===v}">${l}</button>`).join('')}</div>`}
 function spSaveBtn(){const b=$('#spHost [data-act="spSave"]');if(b){const on=spDirty()||!SP.s.plan;b.disabled=!on;b.textContent=on?'Save plan':'Saved'}const t=$('#spHost .sp-total');if(t){const n=spTotal(SP.p);t.innerHTML=n?`<b>${n}</b> min planned`:''}}
 function spBind(){
@@ -3771,7 +3784,7 @@ return pages;
 
 /* ---------- actions ---------- */
 function spClean(p){
-return JSON.parse(JSON.stringify({sits:spSits(p),photoId:p.photoId||null,photoThumb:p.photoThumb||null,coachId:p.coachId||null,intention:String(p.intention||'').trim(),function:String(p.function||'').trim(),task:String(p.task||'').trim(),overload:String(p.overload||'').trim(),
+return JSON.parse(JSON.stringify({fmt:p.fmt==='fun'?'fun':'std',sits:spSits(p),photoId:p.photoId||null,photoThumb:p.photoThumb||null,coachId:p.coachId||null,intention:String(p.intention||'').trim(),function:String(p.function||'').trim(),task:String(p.task||'').trim(),overload:String(p.overload||'').trim(),
 blocks:Object.fromEntries(SP_BLOCKS.map(([k])=>{const b=p.blocks[k]||{};return [k,{min:b.min===''||b.min==null?null:num(b.min),drillId:b.drillId||null,notes:b.notes||''}]})),
 reflection:{org:num(p.reflection.org),time:num(p.reflection.time),behaviour:num(p.reflection.behaviour),interventions:num(p.reflection.interventions),comments:p.reflection.comments||''},
 updatedAt:Date.now(),updatedBy:S.me.id||null}));
@@ -3786,9 +3799,10 @@ spClose:()=>{if(spDirty())confirmBox('Leave without saving?','Your changes to th
 spSave:async()=>{try{await writeSession(SP.desc,{plan:spClean(SP.p)});toast('Session plan saved');if(SP.origPhoto&&SP.origPhoto!==SP.p.photoId)photoDel(SP.origPhoto);SP.origPhoto=SP.p.photoId||null;SP.s={...SP.desc,...(sessDoc(SP.sid)||{}),plan:spClean(SP.p)};SP.orig=JSON.stringify(SP.p);spRender()}catch(e){}},
 spDelete:()=>confirmBox('Delete session plan',`Delete the plan for ${esc(SP.s.group||'')} on ${esc(fmtDayLong(SP.s.date))}? The training session and its attendance stay; only the plan and its reflection are removed.`,'Delete plan',async()=>{await writeSession(SP.desc,{plan:null});toast('Session plan deleted');if(SP.origPhoto)photoDel(SP.origPhoto);SP.orig=JSON.stringify(SP.p);spCloseNow()}),
 spSits:d=>{SP.p.sits=Number(d.v)===1?1:2;spRender();spSaveBtn()},
+spFmt:d=>{SP.p.fmt=d.v==='fun'?'fun':'std';spRender();spSaveBtn()},
 spRate:d=>{const cur=num(SP.p.reflection[d.k]);SP.p.reflection[d.k]=cur===Number(d.v)?0:Number(d.v);spRender()},
 spUnlink:d=>{SP.p.blocks[d.b].drillId='';spRender()},
-spDraw:d=>{const k=d.b,lab=spLabel(k,SP.p),foc=(SP_BLOCKS.find(x=>x[0]===k)||[])[2];
+spDraw:d=>{const k=d.b,lab=spLabel(k,SP.p),foc=spFocus(k,SP.p);
 DR.after=id=>{SP.p.blocks[k].drillId=id;toast(`Drill added to ${lab}. Save the plan to keep it.`)};
 ACT.openDrill({prefill:{title:`${lab} · ${SP.s.group||''}`.trim(),ages:SP.s.group?[SP.s.group]:[],focus:foc?[foc]:[],duration:SP.p.blocks[k].min||''}})},
 spPick:d=>{const k=d.b,cur=SP.p.blocks[k].drillId;const g=SP.s.group;
@@ -3816,7 +3830,7 @@ onSubmit:async f=>{if(!f.date||monthOf(f.date)!==m)return `Pick a date in ${fmtM
 /* ---------- inside a training session ---------- */
 function spPanel(s){
 if(!isStaffR(S.role))return '';
-if(!s.plan)return panel({title:'Session plan',body:`<div class="att-row"><div class="grow muted small">No plan yet. Plan the warm-up, the technical part, one or two situations and the match, then reflect after training.</div><button class="btn sm primary" data-act="openPlan" data-s="${s.id}">Build session plan</button></div>`});
+if(!s.plan)return panel({title:'Session plan',body:`<div class="att-row"><div class="grow muted small">${spFunGroup(s.group)?'No plan yet. Plan the fun warm-up, the technical fun drill, the skill practice and the match, then reflect after training.':'No plan yet. Plan the warm-up, the technical part, one or two situations and the match, then reflect after training.'}</div><button class="btn sm primary" data-act="openPlan" data-s="${s.id}">Build session plan</button></div>`});
 const P=spFrom(s),avg=spAvg(P.reflection),tot=spTotal(P);
 return panel({title:'Session plan',count:tot?tot+' min':null,actions:`<button class="btn sm primary" data-act="openPlan" data-s="${s.id}">Open plan</button>`,
 body:`${P.intention?`<div class="att-row"><div class="grow"><div class="s">Team intention</div><div class="t">${esc(P.intention)}</div></div></div>`:''}${spBlocks(P).map(([k,l],i)=>{const b=P.blocks[k],dr=b.drillId&&byId(D.drills,b.drillId);return `<div class="att-row"><span class="sp-n">${i+1}</span><div class="grow"><div class="t">${l}</div><div class="s">${dr?esc(dr.title||'Untitled drill'):'No drill yet'}</div></div><span class="mono small">${b.min?num(b.min)+' min':''}</span></div>`}).join('')}`,
@@ -3838,7 +3852,7 @@ if(mg&&refl.length){const rows={};refl.forEach(({p})=>{const k=p.coachId||'';(ro
 byCoach=panel({title:'Reflection by coach',count:fmtMonth(S.month),body:`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Coach</th><th class="r">Sessions</th>${SP_REFLECT.map(([,l])=>`<th class="r">${esc(l.replace('Was the desired behaviour provoked?','Behaviour').replace('Coaching interventions','Interventions').replace('Time management','Time'))}</th>`).join('')}<th class="r">Overall</th></tr></thead><tbody>${Object.entries(rows).map(([cid,ps])=>{const a=k=>{const v=ps.map(p=>num(p.reflection[k])).filter(x=>x>0);return v.length?(Math.round(sum(v)/v.length*10)/10):'—'};const o=Math.round(sum(ps,p=>spAvg(p.reflection))/ps.length*10)/10;return `<tr><td class="strong">${esc(cid?coachName(cid):'No coach')}</td><td class="r">${ps.length}</td>${SP_REFLECT.map(([k])=>`<td class="r">${a(k)}</td>`).join('')}<td class="r strong">${o}</td></tr>`}).join('')}</tbody></table></div>`})}
 return titleBlock({sec:'Daily · Session plans',title:'Session plans',cells:[['Plans',list.length],['Avg. reflection',avgAll!=null?avgAll+'/5':'—']]})+
 `<div class="toolbar"><div class="row" style="flex:1">${S.role==='coach'?chips('spm',[['mine','My sessions'],['all','All coaches']],'mine','Whose plans'):''}${pickSel('spg',groupOpts(true),'','Age group')}</div><button class="btn primary" data-act="newPlan">${ICON.plus} New session plan</button></div>
-${list.length?`<div class="spcs">${list.map(card).join('')}</div>`:`<div class="panel">${empty(all.length?'No plans match':'No session plans this month',all.length?'Try another filter.':'Plan a training: warm-up, technical part, one or two situations and a match, each with a drill and coaching notes. Reflect on it after the session.',`<button class="btn primary" data-act="newPlan">${ICON.plus} New session plan</button>`)}</div>`}
+${list.length?`<div class="spcs">${list.map(card).join('')}</div>`:`<div class="panel">${empty(all.length?'No plans match':'No session plans this month',all.length?'Try another filter.':'Plan a training part by part, each with a drill and coaching notes. Reflect on it after the session.',`<button class="btn primary" data-act="newPlan">${ICON.plus} New session plan</button>`)}</div>`}
 ${past.length&&refl.length<past.length?`<p class="muted small">${past.length-refl.length} past session${past.length-refl.length>1?'s are':' is'} still waiting for a reflection.</p>`:''}
 ${byCoach}`;
 };
@@ -3882,10 +3896,10 @@ g.fillStyle=bg||'#2c7445';g.fillRect(x,y,w,h);
 if(pic){const sc=Math.min((w-16)/pic.width,(h-16)/pic.height);const pw=pic.width*sc,ph=pic.height*sc;g.drawImage(pic,x+(w-pw)/2,y+(h-ph)/2,pw,ph)}
 }
 
-/* whole session: header, intention, the four parts in a 2 × 2 grid */
+/* whole session: header, intention, the parts two by two (an odd last part takes the full width) */
 async function spShareCanvas(s,p,size,notes){
 await invFonts();const logo=await shLogo();const Z=SH_SIZES[size]||SH_SIZES.post,W=Z.w,H=Z.h,M=56;
-const pics={};for(const [k] of SP_BLOCKS){const dr=p.blocks[k].drillId&&byId(D.drills,p.blocks[k].drillId);try{pics[k]=await drCanvas(dr||{pitch:'full',grass:'classic',items:[],lines:[]},1.3)}catch(e){}}
+const BL=spBlocks(p);const pics={};for(const [k] of BL){const dr=p.blocks[k].drillId&&byId(D.drills,p.blocks[k].drillId);try{pics[k]=await drCanvas(dr||{pitch:'full',grass:'classic',items:[],lines:[]},1.3)}catch(e){}}
 const K=shCanvas(W,H),{g,T,fit,wrap}=K;
 shHeader(K,logo,'TRAINING SESSION',W,M);
 let y=262;
@@ -3897,9 +3911,10 @@ if(p.intention){T('TEAM INTENTION',M,y+20,`600 14px ${SHF.m}`,SH_ICE,'left',3);c
 const meta=[['Function',p.function],['Task',p.task],['Overload',p.overload]].filter(([,v])=>v);
 if(meta.length){y+=10;const cw=(W-2*M)/meta.length;let mh=0;meta.forEach(([k,v],i)=>{const x=M+i*cw;T(k.toUpperCase(),x,y+18,`600 13px ${SHF.m}`,SH_ICE,'left',3);const ls=wrap(v,`600 20px ${SHF.b}`,cw-24,2);ls.forEach((l,j)=>T(l,x,y+46+j*26,`600 20px ${SHF.b}`,'#FFFFFF'));mh=Math.max(mh,ls.length)});y+=40+mh*26}
 y+=22;
-const foot=H-110,gap=22,cw=(W-2*M-gap)/2,ch=(foot-y-gap)/2,nl=notes?(size==='story'?4:2):0;
-SP_BLOCKS.forEach(([k,l],i)=>{
-const x=M+(i%2)*(cw+gap),yy=y+Math.floor(i/2)*(ch+gap),b=p.blocks[k],dr=b.drillId&&byId(D.drills,b.drillId);
+const rows=Math.ceil(BL.length/2),foot=H-110,gap=22,ch=(foot-y-gap*(rows-1))/rows,nl=notes?(size==='story'?(rows>2?3:4):2):0;
+BL.forEach(([k,l],i)=>{
+const last=i===BL.length-1&&BL.length%2===1,cw=last?W-2*M:(W-2*M-gap)/2;
+const x=M+(last?0:(i%2)*(cw+gap)),yy=y+Math.floor(i/2)*(ch+gap),b=p.blocks[k],dr=b.drillId&&byId(D.drills,b.drillId);
 g.fillStyle='rgba(255,255,255,.06)';g.fillRect(x,yy,cw,ch);g.strokeStyle=SH_LINE;g.lineWidth=1.5;g.strokeRect(x+.75,yy+.75,cw-1.5,ch-1.5);
 g.fillStyle='#FFFFFF';g.fillRect(x,yy,cw,50);
 T(String(i+1).padStart(2,'0'),x+16,yy+33,`600 16px ${SHF.m}`,'#5D6886','left',1);T(l.toUpperCase(),x+52,yy+36,`600 28px ${SHF.d}`,SH_NAVY,'left',3);T(b.min?`${num(b.min)}′`:'',x+cw-16,yy+35,`600 22px ${SHF.m}`,SH_NAVY,'right',1);
@@ -4036,7 +4051,7 @@ ACT.drPhotoReplace=()=>{pickImage().then(async f=>{if(!f)return;try{const r=awai
 ACT.drPhotoRotate=async()=>{try{const src=await drPhotoSrc(DR.d);if(!src)return;const r=await photoRotate(src);DR.d._full=r.full;DR.d.thumb=r.thumb;drRender()}catch(e){photoErr(e)}};
 
 /* ---------- session plan pictures ---------- */
-ACT.spUpload=d=>{const k=d.b;const lab=(SP_BLOCKS.find(x=>x[0]===k)||[])[1]||'Drill',foc=(SP_BLOCKS.find(x=>x[0]===k)||[])[2];
+ACT.spUpload=d=>{const k=d.b;const lab=spLabel(k,SP.p),foc=spFocus(k,SP.p);
 pickImage().then(async f=>{if(!f)return;try{toast('Uploading the picture…');const r=await photoPrep(f);const pid=await photoStore(r.full);
 const o={title:`${lab} · ${SP.s.group||''} · ${fmtDate(SP.s.date)}`,kind:'photo',photoId:pid,thumb:r.thumb,focus:foc?[foc]:[],ages:SP.s.group?[SP.s.group]:[],duration:SP.p.blocks[k].min===''?null:num(SP.p.blocks[k].min),players:'',desc:'',points:'',pitch:'full',grass:'classic',items:[],lines:[],updatedAt:Date.now(),updatedBy:S.me.id||null,by:S.me.id||null,at:Date.now()};
 const id=await W(()=>Store.add('drills',o));SP.p.blocks[k].drillId=id;spRender();toast(`Picture added to ${lab}. Save the plan to keep it.`)}catch(e){photoErr(e)}})};
@@ -6561,7 +6576,7 @@ render();
 /* new versions: GitHub Pages lets phones keep the old page for up to 10 minutes after an upload.
 The app looks for a newer copy when it opens (and reloads once by itself) and each time it comes
 back on screen (reloads if no window is open, otherwise offers a Refresh button). */
-const BUILD_ID='1794401281';
+const BUILD_ID='1794493117';
 let updBusy=0,updOffered=0;
 async function checkUpdate(opening){
 if(updBusy||updOffered||!/^https?:$/.test(location.protocol)||/__BUILD/.test(BUILD_ID))return;updBusy=1;
